@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
-import { EMPTY_FORM, JERSEY_COLORS, SIZES, SLEEVE_TYPES, validateForm } from '../utils/validation'
+import { JERSEY_COLORS, SIZES, SLEEVE_TYPES, validateForm } from '../utils/validation'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { checkFieldAvailability, createOrder, updateOrder } from '../services/ordersService'
 
@@ -9,20 +9,68 @@ const FIELD_LABELS = {
   shortName: 'Short name',
 }
 
+const EMPTY_JERSEY = {
+  firstName: '',
+  lastName: '',
+  shortName: '',
+  jerseyNumber: '',
+  jerseySize: 'M',
+  jerseyColor: 'Red',
+  sleeveType: 'Half Sleeve',
+  quantity: 1,
+  needDragon: false,
+  needBlueWhale: false,
+}
+
+const EMPTY_HAT = { hatSize: 'M' }
+const EMPTY_PANTS = { pantsSize: 'M' }
+
+// Decomposes a flat order record (as stored in Firestore) into cart items for editing.
+function decomposeCart(initialForm, mode) {
+  if (mode !== 'edit' || !initialForm) {
+    return { jersey: null, hat: null, pants: null }
+  }
+  const jersey = {
+    firstName: initialForm.firstName,
+    lastName: initialForm.lastName,
+    shortName: initialForm.shortName,
+    jerseyNumber: initialForm.jerseyNumber,
+    jerseySize: initialForm.jerseySize,
+    jerseyColor: initialForm.jerseyColor,
+    sleeveType: initialForm.sleeveType,
+    quantity: initialForm.quantity,
+    needDragon: initialForm.needDragon,
+    needBlueWhale: initialForm.needBlueWhale,
+  }
+  return {
+    jersey,
+    hat: initialForm.needHat ? { hatSize: initialForm.hatSize } : null,
+    pants: initialForm.needPants ? { pantsSize: initialForm.pantsSize } : null,
+  }
+}
+
+function summarizeJersey(j) {
+  const addon = j.jerseyColor === 'Red' ? (j.needDragon ? ' · Dragon' : '') : j.needBlueWhale ? ' · Blue Whale' : ''
+  return `#${j.jerseyNumber} · ${j.firstName} ${j.lastName} ("${j.shortName}") · ${j.jerseyColor} · Size ${j.jerseySize} · ${j.sleeveType} · Qty ${j.quantity}${addon}`
+}
+
 export default function OrderFormModal({ mode, initialForm, orderId, onClose, onSaved }) {
-  const [step, setStep] = useState('form')
-  const [form, setForm] = useState(initialForm ?? EMPTY_FORM)
+  const [cart, setCart] = useState(() => decomposeCart(initialForm, mode))
+  const [step, setStep] = useState(mode === 'edit' ? 'cart' : 'jersey')
+  const [jerseyDraft, setJerseyDraft] = useState(() => decomposeCart(initialForm, mode).jersey ?? EMPTY_JERSEY)
+  const [hatDraft, setHatDraft] = useState(() => decomposeCart(initialForm, mode).hat ?? EMPTY_HAT)
+  const [pantsDraft, setPantsDraft] = useState(() => decomposeCart(initialForm, mode).pants ?? EMPTY_PANTS)
   const [errors, setErrors] = useState({})
   const [fieldStatus, setFieldStatus] = useState({ jerseyNumber: null, shortName: null })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
-  const debouncedJerseyNumber = useDebouncedValue(form.jerseyNumber)
-  const debouncedShortName = useDebouncedValue(form.shortName)
+  const debouncedJerseyNumber = useDebouncedValue(jerseyDraft.jerseyNumber)
+  const debouncedShortName = useDebouncedValue(jerseyDraft.shortName)
 
   useEffect(() => {
     let active = true
-    if (!form.jerseyNumber.toString().trim()) {
+    if (!jerseyDraft.jerseyNumber.toString().trim()) {
       setFieldStatus((s) => ({ ...s, jerseyNumber: null }))
       return
     }
@@ -38,7 +86,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
 
   useEffect(() => {
     let active = true
-    if (!form.shortName.trim()) {
+    if (!jerseyDraft.shortName.trim()) {
       setFieldStatus((s) => ({ ...s, shortName: null }))
       return
     }
@@ -52,13 +100,30 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedShortName])
 
-  function updateField(name, value) {
-    setForm((f) => ({ ...f, [name]: value }))
+  function updateJerseyField(name, value) {
+    setJerseyDraft((f) => ({ ...f, [name]: value }))
   }
 
-  function handleContinue(event) {
+  function openJerseyStep() {
+    setJerseyDraft(cart.jersey ?? EMPTY_JERSEY)
+    setErrors({})
+    setSubmitError('')
+    setStep('jersey')
+  }
+
+  function openHatStep() {
+    setHatDraft(cart.hat ?? EMPTY_HAT)
+    setStep('hat')
+  }
+
+  function openPantsStep() {
+    setPantsDraft(cart.pants ?? EMPTY_PANTS)
+    setStep('pants')
+  }
+
+  function handleAddJerseyToOrder(event) {
     event.preventDefault()
-    const validationErrors = validateForm(form)
+    const validationErrors = validateForm(jerseyDraft)
     if (fieldStatus.jerseyNumber === 'taken') {
       validationErrors.jerseyNumber = 'That jersey number is already taken.'
     }
@@ -67,23 +132,41 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
     }
     setErrors(validationErrors)
     if (Object.keys(validationErrors).length === 0) {
-      setStep('review')
+      setCart((c) => ({ ...c, jersey: jerseyDraft }))
+      setStep('cart')
     }
   }
 
-  async function handleConfirm() {
+  function handleAddHatToOrder() {
+    setCart((c) => ({ ...c, hat: hatDraft }))
+    setStep('cart')
+  }
+
+  function handleAddPantsToOrder() {
+    setCart((c) => ({ ...c, pants: pantsDraft }))
+    setStep('cart')
+  }
+
+  async function handleSubmitOrder() {
     setSubmitting(true)
     setSubmitError('')
     try {
+      const combinedForm = {
+        ...cart.jersey,
+        needHat: Boolean(cart.hat),
+        hatSize: cart.hat?.hatSize ?? 'M',
+        needPants: Boolean(cart.pants),
+        pantsSize: cart.pants?.pantsSize ?? 'M',
+      }
       const result =
-        mode === 'edit' ? await updateOrder(orderId, form) : await createOrder(form)
+        mode === 'edit' ? await updateOrder(orderId, combinedForm) : await createOrder(combinedForm)
 
       if (!result.success) {
         const fields = [...new Set(result.conflicts.map((c) => FIELD_LABELS[c.field]))]
         setSubmitError(
           `Someone already has that ${fields.join(' / ')}. Please choose different values.`,
         )
-        setStep('form')
+        setStep('cart')
         return
       }
       onSaved(result)
@@ -94,215 +177,55 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
     }
   }
 
-  const title = mode === 'edit' ? 'Edit Your Order' : 'New Jersey Order'
+  const title =
+    step === 'jersey'
+      ? cart.jersey
+        ? 'Edit Jersey'
+        : 'Add Jersey'
+      : step === 'hat'
+        ? cart.hat
+          ? 'Edit Hat'
+          : 'Add Hat'
+        : step === 'pants'
+          ? cart.pants
+            ? 'Edit Pants'
+            : 'Add Pants'
+          : step === 'review'
+            ? 'Review Order'
+            : mode === 'edit'
+              ? 'Edit Order'
+              : 'New Order'
 
   return (
     <Modal title={title} onClose={onClose}>
-      {step === 'form' ? (
-        <form onSubmit={handleContinue} noValidate>
-          <div className="form-grid">
-            <Field
-              label="First Name"
-              id="firstName"
-              value={form.firstName}
-              onChange={(v) => updateField('firstName', v)}
-              error={errors.firstName}
+      {step === 'cart' && (
+        <div>
+          <p className="muted">
+            Add each item to your order, then review and submit when you&rsquo;re ready.
+          </p>
+          <div className="cart-list">
+            <CartItemRow
+              label="Jersey"
               required
+              summary={cart.jersey ? summarizeJersey(cart.jersey) : null}
+              onAdd={openJerseyStep}
+              onEdit={openJerseyStep}
             />
-            <Field
-              label="Last Name"
-              id="lastName"
-              value={form.lastName}
-              onChange={(v) => updateField('lastName', v)}
-              error={errors.lastName}
-              required
+            <CartItemRow
+              label="Hat"
+              summary={cart.hat ? `Size ${cart.hat.hatSize}` : null}
+              onAdd={openHatStep}
+              onEdit={openHatStep}
+              onRemove={() => setCart((c) => ({ ...c, hat: null }))}
             />
-            <Field
-              label="Short Name"
-              id="shortName"
-              value={form.shortName}
-              onChange={(v) => updateField('shortName', v)}
-              error={errors.shortName}
-              hint="Shown on the back of the jersey. Must be unique."
-              status={fieldStatus.shortName}
-              required
-            />
-            <Field
-              label="Jersey Number"
-              id="jerseyNumber"
-              value={form.jerseyNumber}
-              onChange={(v) => updateField('jerseyNumber', v.replace(/[^\d]/g, '').slice(0, 3))}
-              error={errors.jerseyNumber}
-              hint="Must be unique across the team."
-              status={fieldStatus.jerseyNumber}
-              inputMode="numeric"
-              required
-            />
-            <SizeSelect
-              label="Jersey Size"
-              id="jerseySize"
-              value={form.jerseySize}
-              onChange={(v) => updateField('jerseySize', v)}
-            />
-            <div className="field">
-              <label htmlFor="jerseyColor">Jersey Color</label>
-              <select
-                id="jerseyColor"
-                value={form.jerseyColor}
-                onChange={(e) => updateField('jerseyColor', e.target.value)}
-              >
-                {JERSEY_COLORS.map((color) => (
-                  <option key={color} value={color}>
-                    {color}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Field
-              label="How Many Jerseys?"
-              id="quantity"
-              value={form.quantity}
-              onChange={(v) => updateField('quantity', v.replace(/[^\d]/g, '').slice(0, 2))}
-              error={errors.quantity}
-              inputMode="numeric"
-              required
+            <CartItemRow
+              label="Pants"
+              summary={cart.pants ? `Size ${cart.pants.pantsSize}` : null}
+              onAdd={openPantsStep}
+              onEdit={openPantsStep}
+              onRemove={() => setCart((c) => ({ ...c, pants: null }))}
             />
           </div>
-
-          <fieldset className="fieldset">
-            <legend>Sleeve Type</legend>
-            <div className="toggle-row">
-              {SLEEVE_TYPES.map((type) => (
-                <label className="radio" key={type}>
-                  <input
-                    type="radio"
-                    name="sleeveType"
-                    checked={form.sleeveType === type}
-                    onChange={() => updateField('sleeveType', type)}
-                  />
-                  {type}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          {form.jerseyColor === 'Red' && (
-            <fieldset className="fieldset">
-              <legend>Need Dragon?</legend>
-              <div className="toggle-row">
-                <label className="radio">
-                  <input
-                    type="radio"
-                    name="needDragon"
-                    checked={form.needDragon === true}
-                    onChange={() => updateField('needDragon', true)}
-                  />
-                  Yes
-                </label>
-                <label className="radio">
-                  <input
-                    type="radio"
-                    name="needDragon"
-                    checked={form.needDragon === false}
-                    onChange={() => updateField('needDragon', false)}
-                  />
-                  No
-                </label>
-              </div>
-            </fieldset>
-          )}
-
-          {form.jerseyColor === 'Blue' && (
-            <fieldset className="fieldset">
-              <legend>Need Blue Whale?</legend>
-              <div className="toggle-row">
-                <label className="radio">
-                  <input
-                    type="radio"
-                    name="needBlueWhale"
-                    checked={form.needBlueWhale === true}
-                    onChange={() => updateField('needBlueWhale', true)}
-                  />
-                  Yes
-                </label>
-                <label className="radio">
-                  <input
-                    type="radio"
-                    name="needBlueWhale"
-                    checked={form.needBlueWhale === false}
-                    onChange={() => updateField('needBlueWhale', false)}
-                  />
-                  No
-                </label>
-              </div>
-            </fieldset>
-          )}
-
-          <fieldset className="fieldset">
-            <legend>Need Hats?</legend>
-            <div className="toggle-row">
-              <label className="radio">
-                <input
-                  type="radio"
-                  name="needHat"
-                  checked={form.needHat === true}
-                  onChange={() => updateField('needHat', true)}
-                />
-                Yes
-              </label>
-              <label className="radio">
-                <input
-                  type="radio"
-                  name="needHat"
-                  checked={form.needHat === false}
-                  onChange={() => updateField('needHat', false)}
-                />
-                No
-              </label>
-              {form.needHat && (
-                <SizeSelect
-                  label="Hat Size"
-                  id="hatSize"
-                  value={form.hatSize}
-                  onChange={(v) => updateField('hatSize', v)}
-                  compact
-                />
-              )}
-            </div>
-          </fieldset>
-
-          <fieldset className="fieldset">
-            <legend>Need Pants? <span className="muted">(cost assessed based on order)</span></legend>
-            <div className="toggle-row">
-              <label className="radio">
-                <input
-                  type="radio"
-                  name="needPants"
-                  checked={form.needPants === true}
-                  onChange={() => updateField('needPants', true)}
-                />
-                Yes
-              </label>
-              <label className="radio">
-                <input
-                  type="radio"
-                  name="needPants"
-                  checked={form.needPants === false}
-                  onChange={() => updateField('needPants', false)}
-                />
-                No
-              </label>
-              {form.needPants && (
-                <SizeSelect
-                  label="Pants Size"
-                  id="pantsSize"
-                  value={form.pantsSize}
-                  onChange={(v) => updateField('pantsSize', v)}
-                  compact
-                />
-              )}
-            </div>
-          </fieldset>
 
           {submitError && (
             <p className="form-error" role="alert">
@@ -314,35 +237,266 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
             <button type="button" className="btn btn--ghost" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn btn--primary">
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!cart.jersey}
+              onClick={() => setStep('review')}
+            >
               Review Order
             </button>
           </div>
+        </div>
+      )}
+
+      {step === 'jersey' && (
+        <form onSubmit={handleAddJerseyToOrder} noValidate>
+          <div className="form-grid">
+            <Field
+              label="First Name"
+              id="firstName"
+              value={jerseyDraft.firstName}
+              onChange={(v) => updateJerseyField('firstName', v)}
+              error={errors.firstName}
+              required
+            />
+            <Field
+              label="Last Name"
+              id="lastName"
+              value={jerseyDraft.lastName}
+              onChange={(v) => updateJerseyField('lastName', v)}
+              error={errors.lastName}
+              required
+            />
+            <Field
+              label="Short Name"
+              id="shortName"
+              value={jerseyDraft.shortName}
+              onChange={(v) => updateJerseyField('shortName', v)}
+              error={errors.shortName}
+              hint="Shown on the back of the jersey. Must be unique."
+              status={fieldStatus.shortName}
+              required
+            />
+            <Field
+              label="Jersey Number"
+              id="jerseyNumber"
+              value={jerseyDraft.jerseyNumber}
+              onChange={(v) => updateJerseyField('jerseyNumber', v.replace(/[^\d]/g, '').slice(0, 3))}
+              error={errors.jerseyNumber}
+              hint="Must be unique across the team."
+              status={fieldStatus.jerseyNumber}
+              inputMode="numeric"
+              required
+            />
+            <SizeSelect
+              label="Jersey Size"
+              id="jerseySize"
+              value={jerseyDraft.jerseySize}
+              onChange={(v) => updateJerseyField('jerseySize', v)}
+            />
+            <div className="field">
+              <label htmlFor="jerseyColor">Jersey Color</label>
+              <select
+                id="jerseyColor"
+                value={jerseyDraft.jerseyColor}
+                onChange={(e) => updateJerseyField('jerseyColor', e.target.value)}
+              >
+                {JERSEY_COLORS.map((color) => (
+                  <option key={color} value={color}>
+                    {color}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <fieldset className="fieldset">
+            <legend>Sleeve Type</legend>
+            <div className="toggle-row">
+              {SLEEVE_TYPES.map((type) => (
+                <label className="radio" key={type}>
+                  <input
+                    type="radio"
+                    name="sleeveType"
+                    checked={jerseyDraft.sleeveType === type}
+                    onChange={() => updateJerseyField('sleeveType', type)}
+                  />
+                  {type}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {jerseyDraft.jerseyColor === 'Red' && (
+            <fieldset className="fieldset">
+              <legend>Need Dragon?</legend>
+              <div className="toggle-row">
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name="needDragon"
+                    checked={jerseyDraft.needDragon === true}
+                    onChange={() => updateJerseyField('needDragon', true)}
+                  />
+                  Yes
+                </label>
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name="needDragon"
+                    checked={jerseyDraft.needDragon === false}
+                    onChange={() => updateJerseyField('needDragon', false)}
+                  />
+                  No
+                </label>
+              </div>
+            </fieldset>
+          )}
+
+          {jerseyDraft.jerseyColor === 'Blue' && (
+            <fieldset className="fieldset">
+              <legend>Need Blue Whale?</legend>
+              <div className="toggle-row">
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name="needBlueWhale"
+                    checked={jerseyDraft.needBlueWhale === true}
+                    onChange={() => updateJerseyField('needBlueWhale', true)}
+                  />
+                  Yes
+                </label>
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name="needBlueWhale"
+                    checked={jerseyDraft.needBlueWhale === false}
+                    onChange={() => updateJerseyField('needBlueWhale', false)}
+                  />
+                  No
+                </label>
+              </div>
+            </fieldset>
+          )}
+
+          <div className="form-grid">
+            <Field
+              label="How Many Jerseys?"
+              id="quantity"
+              value={jerseyDraft.quantity}
+              onChange={(v) => updateJerseyField('quantity', v.replace(/[^\d]/g, '').slice(0, 2))}
+              error={errors.quantity}
+              inputMode="numeric"
+              required
+            />
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
+              Back to Order
+            </button>
+            <button type="submit" className="btn btn--primary">
+              Add to Order
+            </button>
+          </div>
         </form>
-      ) : (
+      )}
+
+      {step === 'hat' && (
         <div>
-          <ReviewSummary form={form} />
+          <SizeSelect
+            label="Hat Size"
+            id="hatSize"
+            value={hatDraft.hatSize}
+            onChange={(v) => setHatDraft({ hatSize: v })}
+          />
+          <div className="modal-actions">
+            <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
+              Back to Order
+            </button>
+            <button type="button" className="btn btn--primary" onClick={handleAddHatToOrder}>
+              Add to Order
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'pants' && (
+        <div>
+          <p className="muted">Cost assessed based on order.</p>
+          <SizeSelect
+            label="Pants Size"
+            id="pantsSize"
+            value={pantsDraft.pantsSize}
+            onChange={(v) => setPantsDraft({ pantsSize: v })}
+          />
+          <div className="modal-actions">
+            <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
+              Back to Order
+            </button>
+            <button type="button" className="btn btn--primary" onClick={handleAddPantsToOrder}>
+              Add to Order
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'review' && (
+        <div>
+          <ReviewSummary cart={cart} />
           {submitError && (
             <p className="form-error" role="alert">
               {submitError}
             </p>
           )}
           <div className="modal-actions">
-            <button type="button" className="btn btn--ghost" onClick={() => setStep('form')}>
-              Back to Edit
+            <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
+              Back to Order
             </button>
             <button
               type="button"
               className="btn btn--primary"
-              onClick={handleConfirm}
+              onClick={handleSubmitOrder}
               disabled={submitting}
             >
-              {submitting ? 'Placing Order…' : mode === 'edit' ? 'Save Changes' : 'Place Order'}
+              {submitting ? 'Submitting…' : 'Submit Order'}
             </button>
           </div>
         </div>
       )}
     </Modal>
+  )
+}
+
+function CartItemRow({ label, required, summary, onAdd, onEdit, onRemove }) {
+  return (
+    <div className="cart-item">
+      <div className="cart-item__info">
+        <p className="cart-item__label">
+          {label} {required && <span className="muted">(required)</span>}
+        </p>
+        <p className={summary ? 'cart-item__summary' : 'muted'}>{summary ?? 'Not added yet'}</p>
+      </div>
+      <div className="cart-item__actions">
+        {summary ? (
+          <>
+            <button type="button" className="btn btn--outline btn--sm" onClick={onEdit}>
+              Edit
+            </button>
+            {onRemove && (
+              <button type="button" className="btn btn--danger btn--sm" onClick={onRemove}>
+                Remove
+              </button>
+            )}
+          </>
+        ) : (
+          <button type="button" className="btn btn--primary btn--sm" onClick={onAdd}>
+            + Add {label}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -394,7 +548,8 @@ function SizeSelect({ label, id, value, onChange, compact }) {
   )
 }
 
-function ReviewSummary({ form }) {
+function ReviewSummary({ cart }) {
+  const jersey = cart.jersey
   return (
     <div className="review-summary">
       <h3>Review Your Order</h3>
@@ -402,46 +557,46 @@ function ReviewSummary({ form }) {
         <div className="review-row">
           <dt>Name</dt>
           <dd>
-            {form.firstName} {form.lastName}
+            {jersey.firstName} {jersey.lastName}
           </dd>
         </div>
         <div className="review-row">
           <dt>Short Name</dt>
-          <dd>{form.shortName}</dd>
+          <dd>{jersey.shortName}</dd>
         </div>
         <div className="review-row">
           <dt>Jersey</dt>
           <dd>
-            #{form.jerseyNumber} · Size {form.jerseySize} · {form.jerseyColor}
+            #{jersey.jerseyNumber} · Size {jersey.jerseySize} · {jersey.jerseyColor}
           </dd>
         </div>
         <div className="review-row">
           <dt>Sleeve Type</dt>
-          <dd>{form.sleeveType}</dd>
+          <dd>{jersey.sleeveType}</dd>
         </div>
-        <div className="review-row">
-          <dt>Quantity</dt>
-          <dd>{form.quantity}</dd>
-        </div>
-        {form.jerseyColor === 'Red' && (
+        {jersey.jerseyColor === 'Red' && (
           <div className="review-row">
             <dt>Dragon</dt>
-            <dd>{form.needDragon ? 'Yes' : 'No'}</dd>
+            <dd>{jersey.needDragon ? 'Yes' : 'No'}</dd>
           </div>
         )}
-        {form.jerseyColor === 'Blue' && (
+        {jersey.jerseyColor === 'Blue' && (
           <div className="review-row">
             <dt>Blue Whale</dt>
-            <dd>{form.needBlueWhale ? 'Yes' : 'No'}</dd>
+            <dd>{jersey.needBlueWhale ? 'Yes' : 'No'}</dd>
           </div>
         )}
         <div className="review-row">
+          <dt>Quantity</dt>
+          <dd>{jersey.quantity}</dd>
+        </div>
+        <div className="review-row">
           <dt>Hat</dt>
-          <dd>{form.needHat ? `Yes · Size ${form.hatSize}` : 'No'}</dd>
+          <dd>{cart.hat ? `Yes · Size ${cart.hat.hatSize}` : 'No'}</dd>
         </div>
         <div className="review-row">
           <dt>Pants</dt>
-          <dd>{form.needPants ? `Yes · Size ${form.pantsSize}` : 'No'}</dd>
+          <dd>{cart.pants ? `Yes · Size ${cart.pants.pantsSize}` : 'No'}</dd>
         </div>
       </dl>
       <p className="muted">Final cost will be confirmed by the team admin.</p>
