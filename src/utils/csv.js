@@ -8,9 +8,9 @@ export function ordersToCsv(orders) {
     'Jerseys Summary',
     'Total Jersey Qty',
     'Needs Hat',
-    'Hat Size',
+    'Hat Details',
     'Needs Pants',
-    'Pants Size',
+    'Pants Details',
     'Total Cost',
     'Status',
     'Created At',
@@ -33,6 +33,14 @@ export function ordersToCsv(orders) {
       })
       .join('; ')
 
+    const hatDetails = order.needHat
+      ? `${order.hatColor || 'Red'} ${order.hatSize} x${order.hatQuantity || 1}`
+      : ''
+
+    const pantsDetails = order.needPants
+      ? `${order.pantsColor || 'Black'} ${order.pantsSize} x${order.pantsQuantity || 1}`
+      : ''
+
     return [
       order.orderNumber,
       order.firstName,
@@ -42,9 +50,9 @@ export function ordersToCsv(orders) {
       jerseySummary,
       totalQty,
       order.needHat ? 'Yes' : 'No',
-      order.needHat ? order.hatSize : '',
+      hatDetails,
       order.needPants ? 'Yes' : 'No',
-      order.needPants ? order.pantsSize : '',
+      pantsDetails,
       order.totalCost != null ? order.totalCost.toFixed(2) : '',
       order.status,
       order.createdAt ? new Date(order.createdAt).toLocaleString() : '',

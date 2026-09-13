@@ -42,6 +42,10 @@ function toOrder(docSnap) {
     id: docSnap.id,
     ...data,
     jerseys,
+    hatColor: data.hatColor || 'Red',
+    hatQuantity: Math.max(1, Number(data.hatQuantity) || 1),
+    pantsColor: data.pantsColor || 'Black',
+    pantsQuantity: Math.max(1, Number(data.pantsQuantity) || 1),
     createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : null,
     updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : null,
   }
@@ -68,8 +72,12 @@ export function computeTotalCost(form, pricing) {
     0,
   )
   let total = pricing.jerseyPrice * totalJerseyQty
-  if (form.needHat) total += pricing.hatPrice
-  if (form.needPants) total += pricing.pantsPrice
+  if (form.needHat) {
+    total += pricing.hatPrice * Math.max(1, Number(form.hatQuantity) || 1)
+  }
+  if (form.needPants) {
+    total += pricing.pantsPrice * Math.max(1, Number(form.pantsQuantity) || 1)
+  }
   return total
 }
 
@@ -161,8 +169,12 @@ export async function createOrder(form) {
     needBlueWhale: jerseys.some((j) => j.needBlueWhale),
     needHat: Boolean(form.needHat),
     hatSize: form.needHat ? form.hatSize : null,
+    hatColor: form.needHat ? form.hatColor : null,
+    hatQuantity: form.needHat ? Math.max(1, Number(form.hatQuantity) || 1) : 0,
     needPants: Boolean(form.needPants),
     pantsSize: form.needPants ? form.pantsSize : null,
+    pantsColor: form.needPants ? form.pantsColor : null,
+    pantsQuantity: form.needPants ? Math.max(1, Number(form.pantsQuantity) || 1) : 0,
     totalCost: computeTotalCost({ ...form, jerseys }, pricing),
     status: 'pending',
     createdAt: serverTimestamp(),
@@ -220,8 +232,12 @@ export async function updateOrder(id, form) {
     needBlueWhale: jerseys.some((j) => j.needBlueWhale),
     needHat: Boolean(form.needHat),
     hatSize: form.needHat ? form.hatSize : null,
+    hatColor: form.needHat ? form.hatColor : null,
+    hatQuantity: form.needHat ? Math.max(1, Number(form.hatQuantity) || 1) : 0,
     needPants: Boolean(form.needPants),
     pantsSize: form.needPants ? form.pantsSize : null,
+    pantsColor: form.needPants ? form.pantsColor : null,
+    pantsQuantity: form.needPants ? Math.max(1, Number(form.pantsQuantity) || 1) : 0,
     totalCost: computeTotalCost({ ...form, jerseys }, pricing),
     updatedAt: serverTimestamp(),
   }

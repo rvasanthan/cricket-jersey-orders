@@ -44,11 +44,19 @@ export default function OrderCard({ order, onEdit, onDelete }) {
         </div>
         <div>
           <dt>Hat</dt>
-          <dd>{order.needHat ? `Yes · Size ${order.hatSize}` : 'No'}</dd>
+          <dd>
+            {order.needHat
+              ? `Yes · ${order.hatColor || 'Red'} · Size ${order.hatSize} · Qty ${order.hatQuantity || 1}`
+              : 'No'}
+          </dd>
         </div>
         <div>
           <dt>Pants</dt>
-          <dd>{order.needPants ? `Yes · Size ${order.pantsSize}` : 'No'}</dd>
+          <dd>
+            {order.needPants
+              ? `Yes · ${order.pantsColor || 'Black'} · Size ${order.pantsSize} · Qty ${order.pantsQuantity || 1}`
+              : 'No'}
+          </dd>
         </div>
         <div>
           <dt>Total Cost</dt>

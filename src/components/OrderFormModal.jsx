@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
 import {
+  HAT_COLORS,
   JERSEY_COLORS,
+  PANTS_COLORS,
   SIZES,
   SLEEVE_TYPES,
   validateJerseyItem,
@@ -24,8 +26,8 @@ const DEFAULT_JERSEY_ITEM = {
   needBlueWhale: false,
 }
 
-const DEFAULT_HAT = { hatSize: 'M' }
-const DEFAULT_PANTS = { pantsSize: 'M' }
+const DEFAULT_HAT = { hatSize: 'M', hatColor: 'Red', quantity: 1 }
+const DEFAULT_PANTS = { pantsSize: 'M', pantsColor: 'Black', quantity: 1 }
 
 function decomposeCart(initialForm, mode) {
   if (mode !== 'edit' || !initialForm) {
@@ -59,8 +61,20 @@ function decomposeCart(initialForm, mode) {
   return {
     player,
     jerseys,
-    hat: initialForm.needHat ? { hatSize: initialForm.hatSize || 'M' } : null,
-    pants: initialForm.needPants ? { pantsSize: initialForm.pantsSize || 'M' } : null,
+    hat: initialForm.needHat
+      ? {
+          hatSize: initialForm.hatSize || 'M',
+          hatColor: initialForm.hatColor || 'Red',
+          quantity: Math.max(1, Number(initialForm.hatQuantity) || 1),
+        }
+      : null,
+    pants: initialForm.needPants
+      ? {
+          pantsSize: initialForm.pantsSize || 'M',
+          pantsColor: initialForm.pantsColor || 'Black',
+          quantity: Math.max(1, Number(initialForm.pantsQuantity) || 1),
+        }
+      : null,
   }
 }
 
@@ -222,8 +236,12 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
         jerseys,
         needHat: Boolean(hat),
         hatSize: hat?.hatSize ?? 'M',
+        hatColor: hat?.hatColor ?? 'Red',
+        hatQuantity: Math.max(1, Number(hat?.quantity) || 1),
         needPants: Boolean(pants),
         pantsSize: pants?.pantsSize ?? 'M',
+        pantsColor: pants?.pantsColor ?? 'Black',
+        pantsQuantity: Math.max(1, Number(pants?.quantity) || 1),
       }
       const result =
         mode === 'edit' ? await updateOrder(orderId, combinedForm) : await createOrder(combinedForm)
@@ -366,7 +384,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
               <h3>Hat</h3>
             </div>
             <CartItemRow
-              summary={hat ? `Size ${hat.hatSize}` : null}
+              summary={hat ? `${hat.hatColor} · Size ${hat.hatSize} · Qty ${hat.quantity}` : null}
               onAdd={openHatStep}
               onEdit={openHatStep}
               onRemove={() => setHat(null)}
@@ -378,7 +396,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
               <h3>Track Pants</h3>
             </div>
             <CartItemRow
-              summary={pants ? `Size ${pants.pantsSize}` : null}
+              summary={pants ? `${pants.pantsColor} · Size ${pants.pantsSize} · Qty ${pants.quantity}` : null}
               onAdd={openPantsStep}
               onEdit={openPantsStep}
               onRemove={() => setPants(null)}
@@ -523,12 +541,41 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
 
       {step === 'hat' && (
         <div>
-          <SizeSelect
-            label="Hat Size"
-            id="hatSize"
-            value={hatDraft.hatSize}
-            onChange={(v) => setHatDraft({ hatSize: v })}
-          />
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor="hatColor">Hat Color</label>
+              <select
+                id="hatColor"
+                value={hatDraft.hatColor}
+                onChange={(e) => setHatDraft((h) => ({ ...h, hatColor: e.target.value }))}
+              >
+                {HAT_COLORS.map((color) => (
+                  <option key={color} value={color}>
+                    {color}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <SizeSelect
+              label="Hat Size"
+              id="hatSize"
+              value={hatDraft.hatSize}
+              onChange={(v) => setHatDraft((h) => ({ ...h, hatSize: v }))}
+            />
+            <Field
+              label="How Many Hats?"
+              id="hatQuantity"
+              value={hatDraft.quantity}
+              onChange={(v) =>
+                setHatDraft((h) => ({
+                  ...h,
+                  quantity: v.replace(/[^\d]/g, '').slice(0, 2),
+                }))
+              }
+              inputMode="numeric"
+              required
+            />
+          </div>
           <div className="modal-actions">
             <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
               Back to Order
@@ -543,12 +590,41 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
       {step === 'pants' && (
         <div>
           <p className="muted">Cost assessed based on order.</p>
-          <SizeSelect
-            label="Pants Size"
-            id="pantsSize"
-            value={pantsDraft.pantsSize}
-            onChange={(v) => setPantsDraft({ pantsSize: v })}
-          />
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor="pantsColor">Pants Color</label>
+              <select
+                id="pantsColor"
+                value={pantsDraft.pantsColor}
+                onChange={(e) => setPantsDraft((p) => ({ ...p, pantsColor: e.target.value }))}
+              >
+                {PANTS_COLORS.map((color) => (
+                  <option key={color} value={color}>
+                    {color}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <SizeSelect
+              label="Pants Size"
+              id="pantsSize"
+              value={pantsDraft.pantsSize}
+              onChange={(v) => setPantsDraft((p) => ({ ...p, pantsSize: v }))}
+            />
+            <Field
+              label="How Many Pants?"
+              id="pantsQuantity"
+              value={pantsDraft.quantity}
+              onChange={(v) =>
+                setPantsDraft((p) => ({
+                  ...p,
+                  quantity: v.replace(/[^\d]/g, '').slice(0, 2),
+                }))
+              }
+              inputMode="numeric"
+              required
+            />
+          </div>
           <div className="modal-actions">
             <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
               Back to Order
@@ -669,7 +745,6 @@ function SizeSelect({ label, id, value, onChange, compact }) {
 function ReviewSummary({ player, jerseys, hat, pants }) {
   return (
     <div className="review-summary">
-      <h3>Review Your Order</h3>
       <dl>
         <div className="review-row">
           <dt>Name</dt>
@@ -695,11 +770,15 @@ function ReviewSummary({ player, jerseys, hat, pants }) {
         </div>
         <div className="review-row">
           <dt>Hat</dt>
-          <dd>{hat ? `Yes · Size ${hat.hatSize}` : 'No'}</dd>
+          <dd>
+            {hat ? `Yes · ${hat.hatColor} · Size ${hat.hatSize} · Qty ${hat.quantity}` : 'No'}
+          </dd>
         </div>
         <div className="review-row">
           <dt>Pants</dt>
-          <dd>{pants ? `Yes · Size ${pants.pantsSize}` : 'No'}</dd>
+          <dd>
+            {pants ? `Yes · ${pants.pantsColor} · Size ${pants.pantsSize} · Qty ${pants.quantity}` : 'No'}
+          </dd>
         </div>
       </dl>
       <p className="muted">Final cost will be confirmed by the team admin.</p>

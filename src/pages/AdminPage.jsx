@@ -100,8 +100,14 @@ function AdminPanel() {
 
   const summary = useMemo(() => {
     const totalRevenue = orders.reduce((sum, o) => sum + (o.totalCost || 0), 0)
-    const hats = orders.filter((o) => o.needHat).length
-    const pants = orders.filter((o) => o.needPants).length
+    const hats = orders.reduce(
+      (sum, o) => sum + (o.needHat ? Math.max(1, Number(o.hatQuantity) || 1) : 0),
+      0,
+    )
+    const pants = orders.reduce(
+      (sum, o) => sum + (o.needPants ? Math.max(1, Number(o.pantsQuantity) || 1) : 0),
+      0,
+    )
     const totalJerseys = orders.reduce((sum, o) => sum + (Number(o.quantity) || 1), 0)
     const redCount = orders.filter((o) => o.jerseyColor === 'Red').length
     const blueCount = orders.filter((o) => o.jerseyColor === 'Blue').length
@@ -312,8 +318,16 @@ function AdminPanel() {
                         })}
                       </td>
                       <td data-label="Total Qty">{totalQty}</td>
-                      <td data-label="Hat">{order.needHat ? order.hatSize : '—'}</td>
-                      <td data-label="Pants">{order.needPants ? order.pantsSize : '—'}</td>
+                      <td data-label="Hat">
+                        {order.needHat
+                          ? `${order.hatColor || 'Red'} / ${order.hatSize} (Qty: ${order.hatQuantity || 1})`
+                          : '—'}
+                      </td>
+                      <td data-label="Pants">
+                        {order.needPants
+                          ? `${order.pantsColor || 'Black'} / ${order.pantsSize} (Qty: ${order.pantsQuantity || 1})`
+                          : '—'}
+                      </td>
                       <td data-label="Cost">${order.totalCost?.toFixed(2)}</td>
                       <td data-label="Status">
                         <label htmlFor={`status-${order.id}`} className="visually-hidden">

@@ -1,6 +1,8 @@
 export const SIZES = ['S', 'M', 'L', 'XL', 'XXL']
 
 export const JERSEY_COLORS = ['Red', 'Blue']
+export const HAT_COLORS = ['Red', 'Blue', 'Black', 'White']
+export const PANTS_COLORS = ['Black', 'Navy', 'Red', 'Blue', 'White']
 
 export const SLEEVE_TYPES = ['Half Sleeve', 'Full Sleeve']
 
