@@ -21,9 +21,29 @@ export default function OrderCard({ order, onEdit, onDelete }) {
         <div>
           <dt>Jersey</dt>
           <dd>
-            #{order.jerseyNumber} · Size {order.jerseySize}
+            #{order.jerseyNumber} · Size {order.jerseySize} · {order.jerseyColor}
           </dd>
         </div>
+        <div>
+          <dt>Sleeve</dt>
+          <dd>{order.sleeveType}</dd>
+        </div>
+        <div>
+          <dt>Quantity</dt>
+          <dd>{order.quantity}</dd>
+        </div>
+        {order.jerseyColor === 'Red' && (
+          <div>
+            <dt>Dragon</dt>
+            <dd>{order.needDragon ? 'Yes' : 'No'}</dd>
+          </div>
+        )}
+        {order.jerseyColor === 'Blue' && (
+          <div>
+            <dt>Blue Whale</dt>
+            <dd>{order.needBlueWhale ? 'Yes' : 'No'}</dd>
+          </div>
+        )}
         <div>
           <dt>Hat</dt>
           <dd>{order.needHat ? `Yes · Size ${order.hatSize}` : 'No'}</dd>

@@ -42,7 +42,8 @@ export async function savePricing(pricing) {
 }
 
 export function computeTotalCost(form, pricing) {
-  let total = pricing.jerseyPrice
+  const quantity = Math.max(1, Number(form.quantity) || 1)
+  let total = pricing.jerseyPrice * quantity
   if (form.needHat) total += pricing.hatPrice
   if (form.needPants) total += pricing.pantsPrice
   return total
@@ -103,6 +104,11 @@ export async function createOrder(form) {
     shortNameLower: normalize(form.shortName),
     jerseyNumber: form.jerseyNumber.toString().trim(),
     jerseySize: form.jerseySize,
+    jerseyColor: form.jerseyColor,
+    sleeveType: form.sleeveType,
+    quantity: Math.max(1, Number(form.quantity) || 1),
+    needDragon: form.jerseyColor === 'Red' ? form.needDragon : false,
+    needBlueWhale: form.jerseyColor === 'Blue' ? form.needBlueWhale : false,
     needHat: form.needHat,
     hatSize: form.needHat ? form.hatSize : null,
     needPants: form.needPants,
@@ -132,6 +138,11 @@ export async function updateOrder(id, form) {
     shortNameLower: normalize(form.shortName),
     jerseyNumber: form.jerseyNumber.toString().trim(),
     jerseySize: form.jerseySize,
+    jerseyColor: form.jerseyColor,
+    sleeveType: form.sleeveType,
+    quantity: Math.max(1, Number(form.quantity) || 1),
+    needDragon: form.jerseyColor === 'Red' ? form.needDragon : false,
+    needBlueWhale: form.jerseyColor === 'Blue' ? form.needBlueWhale : false,
     needHat: form.needHat,
     hatSize: form.needHat ? form.hatSize : null,
     needPants: form.needPants,

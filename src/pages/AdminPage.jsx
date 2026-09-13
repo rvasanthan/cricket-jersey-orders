@@ -102,7 +102,26 @@ function AdminPanel() {
     const totalRevenue = orders.reduce((sum, o) => sum + (o.totalCost || 0), 0)
     const hats = orders.filter((o) => o.needHat).length
     const pants = orders.filter((o) => o.needPants).length
-    return { count: orders.length, totalRevenue, hats, pants }
+    const totalJerseys = orders.reduce((sum, o) => sum + (Number(o.quantity) || 1), 0)
+    const redCount = orders.filter((o) => o.jerseyColor === 'Red').length
+    const blueCount = orders.filter((o) => o.jerseyColor === 'Blue').length
+    const halfSleeve = orders.filter((o) => o.sleeveType === 'Half Sleeve').length
+    const fullSleeve = orders.filter((o) => o.sleeveType === 'Full Sleeve').length
+    const dragons = orders.filter((o) => o.needDragon).length
+    const blueWhales = orders.filter((o) => o.needBlueWhale).length
+    return {
+      count: orders.length,
+      totalRevenue,
+      hats,
+      pants,
+      totalJerseys,
+      redCount,
+      blueCount,
+      halfSleeve,
+      fullSleeve,
+      dragons,
+      blueWhales,
+    }
   }, [orders])
 
   async function handleStatusChange(order, status) {
@@ -153,6 +172,10 @@ function AdminPanel() {
           <p className="stat-card__label">Total Orders</p>
         </div>
         <div className="stat-card">
+          <p className="stat-card__value">{summary.totalJerseys}</p>
+          <p className="stat-card__label">Total Jerseys</p>
+        </div>
+        <div className="stat-card">
           <p className="stat-card__value">${summary.totalRevenue.toFixed(2)}</p>
           <p className="stat-card__label">Total Cost Summary</p>
         </div>
@@ -163,6 +186,22 @@ function AdminPanel() {
         <div className="stat-card">
           <p className="stat-card__value">{summary.pants}</p>
           <p className="stat-card__label">Pants Requested</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-card__value">{summary.redCount} / {summary.blueCount}</p>
+          <p className="stat-card__label">Red / Blue Jerseys</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-card__value">{summary.halfSleeve} / {summary.fullSleeve}</p>
+          <p className="stat-card__label">Half / Full Sleeve</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-card__value">{summary.dragons}</p>
+          <p className="stat-card__label">Dragons Requested</p>
+        </div>
+        <div className="stat-card">
+          <p className="stat-card__value">{summary.blueWhales}</p>
+          <p className="stat-card__label">Blue Whales Requested</p>
         </div>
       </section>
 
@@ -237,6 +276,9 @@ function AdminPanel() {
                   <th scope="col">Order #</th>
                   <th scope="col">Player</th>
                   <th scope="col">Jersey</th>
+                  <th scope="col">Sleeve</th>
+                  <th scope="col">Qty</th>
+                  <th scope="col">Add-on</th>
                   <th scope="col">Hat</th>
                   <th scope="col">Pants</th>
                   <th scope="col">Cost</th>
@@ -252,7 +294,13 @@ function AdminPanel() {
                       {order.firstName} {order.lastName} ({order.shortName})
                     </td>
                     <td data-label="Jersey">
-                      #{order.jerseyNumber} / {order.jerseySize}
+                      #{order.jerseyNumber} / {order.jerseySize} / {order.jerseyColor}
+                    </td>
+                    <td data-label="Sleeve">{order.sleeveType}</td>
+                    <td data-label="Qty">{order.quantity}</td>
+                    <td data-label="Add-on">
+                      {order.jerseyColor === 'Red' && (order.needDragon ? 'Dragon' : '—')}
+                      {order.jerseyColor === 'Blue' && (order.needBlueWhale ? 'Blue Whale' : '—')}
                     </td>
                     <td data-label="Hat">{order.needHat ? order.hatSize : '—'}</td>
                     <td data-label="Pants">{order.needPants ? order.pantsSize : '—'}</td>
@@ -289,7 +337,7 @@ function AdminPanel() {
                 ))}
                 {filteredOrders.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="empty-row">
+                    <td colSpan={11} className="empty-row">
                       No orders match your filter.
                     </td>
                   </tr>

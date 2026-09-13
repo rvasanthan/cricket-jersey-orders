@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
-import { EMPTY_FORM, SIZES, validateForm } from '../utils/validation'
+import { EMPTY_FORM, JERSEY_COLORS, SIZES, SLEEVE_TYPES, validateForm } from '../utils/validation'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { checkFieldAvailability, createOrder, updateOrder } from '../services/ordersService'
 
@@ -144,7 +144,99 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
               value={form.jerseySize}
               onChange={(v) => updateField('jerseySize', v)}
             />
+            <div className="field">
+              <label htmlFor="jerseyColor">Jersey Color</label>
+              <select
+                id="jerseyColor"
+                value={form.jerseyColor}
+                onChange={(e) => updateField('jerseyColor', e.target.value)}
+              >
+                {JERSEY_COLORS.map((color) => (
+                  <option key={color} value={color}>
+                    {color}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Field
+              label="How Many Jerseys?"
+              id="quantity"
+              value={form.quantity}
+              onChange={(v) => updateField('quantity', v.replace(/[^\d]/g, '').slice(0, 2))}
+              error={errors.quantity}
+              inputMode="numeric"
+              required
+            />
           </div>
+
+          <fieldset className="fieldset">
+            <legend>Sleeve Type</legend>
+            <div className="toggle-row">
+              {SLEEVE_TYPES.map((type) => (
+                <label className="radio" key={type}>
+                  <input
+                    type="radio"
+                    name="sleeveType"
+                    checked={form.sleeveType === type}
+                    onChange={() => updateField('sleeveType', type)}
+                  />
+                  {type}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {form.jerseyColor === 'Red' && (
+            <fieldset className="fieldset">
+              <legend>Need Dragon?</legend>
+              <div className="toggle-row">
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name="needDragon"
+                    checked={form.needDragon === true}
+                    onChange={() => updateField('needDragon', true)}
+                  />
+                  Yes
+                </label>
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name="needDragon"
+                    checked={form.needDragon === false}
+                    onChange={() => updateField('needDragon', false)}
+                  />
+                  No
+                </label>
+              </div>
+            </fieldset>
+          )}
+
+          {form.jerseyColor === 'Blue' && (
+            <fieldset className="fieldset">
+              <legend>Need Blue Whale?</legend>
+              <div className="toggle-row">
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name="needBlueWhale"
+                    checked={form.needBlueWhale === true}
+                    onChange={() => updateField('needBlueWhale', true)}
+                  />
+                  Yes
+                </label>
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name="needBlueWhale"
+                    checked={form.needBlueWhale === false}
+                    onChange={() => updateField('needBlueWhale', false)}
+                  />
+                  No
+                </label>
+              </div>
+            </fieldset>
+          )}
 
           <fieldset className="fieldset">
             <legend>Need Hats?</legend>
@@ -320,9 +412,29 @@ function ReviewSummary({ form }) {
         <div className="review-row">
           <dt>Jersey</dt>
           <dd>
-            #{form.jerseyNumber} · Size {form.jerseySize}
+            #{form.jerseyNumber} · Size {form.jerseySize} · {form.jerseyColor}
           </dd>
         </div>
+        <div className="review-row">
+          <dt>Sleeve Type</dt>
+          <dd>{form.sleeveType}</dd>
+        </div>
+        <div className="review-row">
+          <dt>Quantity</dt>
+          <dd>{form.quantity}</dd>
+        </div>
+        {form.jerseyColor === 'Red' && (
+          <div className="review-row">
+            <dt>Dragon</dt>
+            <dd>{form.needDragon ? 'Yes' : 'No'}</dd>
+          </div>
+        )}
+        {form.jerseyColor === 'Blue' && (
+          <div className="review-row">
+            <dt>Blue Whale</dt>
+            <dd>{form.needBlueWhale ? 'Yes' : 'No'}</dd>
+          </div>
+        )}
         <div className="review-row">
           <dt>Hat</dt>
           <dd>{form.needHat ? `Yes · Size ${form.hatSize}` : 'No'}</dd>

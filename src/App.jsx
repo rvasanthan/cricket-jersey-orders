@@ -12,9 +12,6 @@ export default function App() {
         <Link to="/" className="top-nav__brand">
           🏏 Cricket Jersey Orders
         </Link>
-        <Link to="/admin" className="top-nav__link">
-          Admin
-        </Link>
       </nav>
       <main id="main-content">
         <Routes>
