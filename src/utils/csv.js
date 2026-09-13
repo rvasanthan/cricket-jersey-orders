@@ -5,12 +5,8 @@ export function ordersToCsv(orders) {
     'Last Name',
     'Short Name',
     'Jersey Number',
-    'Jersey Size',
-    'Jersey Color',
-    'Sleeve Type',
-    'Quantity',
-    'Needs Dragon',
-    'Needs Blue Whale',
+    'Jerseys Summary',
+    'Total Jersey Qty',
     'Needs Hat',
     'Hat Size',
     'Needs Pants',
@@ -20,26 +16,40 @@ export function ordersToCsv(orders) {
     'Created At',
   ]
 
-  const rows = orders.map((order) => [
-    order.orderNumber,
-    order.firstName,
-    order.lastName,
-    order.shortName,
-    order.jerseyNumber,
-    order.jerseySize,
-    order.jerseyColor,
-    order.sleeveType,
-    order.quantity,
-    order.jerseyColor === 'Red' ? (order.needDragon ? 'Yes' : 'No') : '',
-    order.jerseyColor === 'Blue' ? (order.needBlueWhale ? 'Yes' : 'No') : '',
-    order.needHat ? 'Yes' : 'No',
-    order.needHat ? order.hatSize : '',
-    order.needPants ? 'Yes' : 'No',
-    order.needPants ? order.pantsSize : '',
-    order.totalCost != null ? order.totalCost.toFixed(2) : '',
-    order.status,
-    order.createdAt ? new Date(order.createdAt).toLocaleString() : '',
-  ])
+  const rows = orders.map((order) => {
+    const jerseys = order.jerseys || []
+    const totalQty = jerseys.reduce((sum, j) => sum + (Number(j.quantity) || 1), 0)
+    const jerseySummary = jerseys
+      .map((j) => {
+        const addon =
+          j.jerseyColor === 'Red'
+            ? j.needDragon
+              ? ' (Dragon)'
+              : ''
+            : j.needBlueWhale
+              ? ' (Blue Whale)'
+              : ''
+        return `${j.jerseyColor} ${j.jerseySize} ${j.sleeveType}${addon} x${j.quantity}`
+      })
+      .join('; ')
+
+    return [
+      order.orderNumber,
+      order.firstName,
+      order.lastName,
+      order.shortName,
+      order.jerseyNumber,
+      jerseySummary,
+      totalQty,
+      order.needHat ? 'Yes' : 'No',
+      order.needHat ? order.hatSize : '',
+      order.needPants ? 'Yes' : 'No',
+      order.needPants ? order.pantsSize : '',
+      order.totalCost != null ? order.totalCost.toFixed(2) : '',
+      order.status,
+      order.createdAt ? new Date(order.createdAt).toLocaleString() : '',
+    ]
+  })
 
   const escape = (value) => {
     const str = String(value ?? '')

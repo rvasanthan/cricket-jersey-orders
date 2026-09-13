@@ -24,9 +24,24 @@ const DEFAULT_PRICING = { jerseyPrice: 25, hatPrice: 12, pantsPrice: 20 }
 
 function toOrder(docSnap) {
   const data = docSnap.data()
+  const jerseys =
+    Array.isArray(data.jerseys) && data.jerseys.length > 0
+      ? data.jerseys
+      : [
+          {
+            jerseySize: data.jerseySize || 'M',
+            jerseyColor: data.jerseyColor || 'Red',
+            sleeveType: data.sleeveType || 'Half Sleeve',
+            quantity: Math.max(1, Number(data.quantity) || 1),
+            needDragon: Boolean(data.needDragon),
+            needBlueWhale: Boolean(data.needBlueWhale),
+          },
+        ]
+
   return {
     id: docSnap.id,
     ...data,
+    jerseys,
     createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : null,
     updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : null,
   }
@@ -42,8 +57,17 @@ export async function savePricing(pricing) {
 }
 
 export function computeTotalCost(form, pricing) {
-  const quantity = Math.max(1, Number(form.quantity) || 1)
-  let total = pricing.jerseyPrice * quantity
+  const jerseys =
+    Array.isArray(form.jerseys) && form.jerseys.length > 0
+      ? form.jerseys
+      : form.jerseyColor
+        ? [form]
+        : []
+  const totalJerseyQty = jerseys.reduce(
+    (sum, j) => sum + Math.max(1, Number(j.quantity) || 1),
+    0,
+  )
+  let total = pricing.jerseyPrice * totalJerseyQty
   if (form.needHat) total += pricing.hatPrice
   if (form.needPants) total += pricing.pantsPrice
   return total
@@ -95,6 +119,30 @@ export async function createOrder(form) {
     orderNumber = generateOrderNumber()
   }
 
+  const jerseys =
+    Array.isArray(form.jerseys) && form.jerseys.length > 0
+      ? form.jerseys.map((j) => ({
+          jerseySize: j.jerseySize || 'M',
+          jerseyColor: j.jerseyColor || 'Red',
+          sleeveType: j.sleeveType || 'Half Sleeve',
+          quantity: Math.max(1, Number(j.quantity) || 1),
+          needDragon: j.jerseyColor === 'Red' ? Boolean(j.needDragon) : false,
+          needBlueWhale: j.jerseyColor === 'Blue' ? Boolean(j.needBlueWhale) : false,
+        }))
+      : [
+          {
+            jerseySize: form.jerseySize || 'M',
+            jerseyColor: form.jerseyColor || 'Red',
+            sleeveType: form.sleeveType || 'Half Sleeve',
+            quantity: Math.max(1, Number(form.quantity) || 1),
+            needDragon: form.jerseyColor === 'Red' ? Boolean(form.needDragon) : false,
+            needBlueWhale: form.jerseyColor === 'Blue' ? Boolean(form.needBlueWhale) : false,
+          },
+        ]
+
+  const firstJersey = jerseys[0]
+  const totalJerseyQty = jerseys.reduce((sum, j) => sum + j.quantity, 0)
+
   const payload = {
     orderNumber,
     firstName: form.firstName.trim(),
@@ -103,17 +151,19 @@ export async function createOrder(form) {
     shortName: form.shortName.trim(),
     shortNameLower: normalize(form.shortName),
     jerseyNumber: form.jerseyNumber.toString().trim(),
-    jerseySize: form.jerseySize,
-    jerseyColor: form.jerseyColor,
-    sleeveType: form.sleeveType,
-    quantity: Math.max(1, Number(form.quantity) || 1),
-    needDragon: form.jerseyColor === 'Red' ? form.needDragon : false,
-    needBlueWhale: form.jerseyColor === 'Blue' ? form.needBlueWhale : false,
-    needHat: form.needHat,
+    jerseys,
+    // Top-level fallbacks for backward compatibility
+    jerseySize: firstJersey.jerseySize,
+    jerseyColor: firstJersey.jerseyColor,
+    sleeveType: firstJersey.sleeveType,
+    quantity: totalJerseyQty,
+    needDragon: jerseys.some((j) => j.needDragon),
+    needBlueWhale: jerseys.some((j) => j.needBlueWhale),
+    needHat: Boolean(form.needHat),
     hatSize: form.needHat ? form.hatSize : null,
-    needPants: form.needPants,
+    needPants: Boolean(form.needPants),
     pantsSize: form.needPants ? form.pantsSize : null,
-    totalCost: computeTotalCost(form, pricing),
+    totalCost: computeTotalCost({ ...form, jerseys }, pricing),
     status: 'pending',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -130,6 +180,30 @@ export async function updateOrder(id, form) {
     return { success: false, conflicts }
   }
 
+  const jerseys =
+    Array.isArray(form.jerseys) && form.jerseys.length > 0
+      ? form.jerseys.map((j) => ({
+          jerseySize: j.jerseySize || 'M',
+          jerseyColor: j.jerseyColor || 'Red',
+          sleeveType: j.sleeveType || 'Half Sleeve',
+          quantity: Math.max(1, Number(j.quantity) || 1),
+          needDragon: j.jerseyColor === 'Red' ? Boolean(j.needDragon) : false,
+          needBlueWhale: j.jerseyColor === 'Blue' ? Boolean(j.needBlueWhale) : false,
+        }))
+      : [
+          {
+            jerseySize: form.jerseySize || 'M',
+            jerseyColor: form.jerseyColor || 'Red',
+            sleeveType: form.sleeveType || 'Half Sleeve',
+            quantity: Math.max(1, Number(form.quantity) || 1),
+            needDragon: form.jerseyColor === 'Red' ? Boolean(form.needDragon) : false,
+            needBlueWhale: form.jerseyColor === 'Blue' ? Boolean(form.needBlueWhale) : false,
+          },
+        ]
+
+  const firstJersey = jerseys[0]
+  const totalJerseyQty = jerseys.reduce((sum, j) => sum + j.quantity, 0)
+
   const payload = {
     firstName: form.firstName.trim(),
     lastName: form.lastName.trim(),
@@ -137,17 +211,18 @@ export async function updateOrder(id, form) {
     shortName: form.shortName.trim(),
     shortNameLower: normalize(form.shortName),
     jerseyNumber: form.jerseyNumber.toString().trim(),
-    jerseySize: form.jerseySize,
-    jerseyColor: form.jerseyColor,
-    sleeveType: form.sleeveType,
-    quantity: Math.max(1, Number(form.quantity) || 1),
-    needDragon: form.jerseyColor === 'Red' ? form.needDragon : false,
-    needBlueWhale: form.jerseyColor === 'Blue' ? form.needBlueWhale : false,
-    needHat: form.needHat,
+    jerseys,
+    jerseySize: firstJersey.jerseySize,
+    jerseyColor: firstJersey.jerseyColor,
+    sleeveType: firstJersey.sleeveType,
+    quantity: totalJerseyQty,
+    needDragon: jerseys.some((j) => j.needDragon),
+    needBlueWhale: jerseys.some((j) => j.needBlueWhale),
+    needHat: Boolean(form.needHat),
     hatSize: form.needHat ? form.hatSize : null,
-    needPants: form.needPants,
+    needPants: Boolean(form.needPants),
     pantsSize: form.needPants ? form.pantsSize : null,
-    totalCost: computeTotalCost(form, pricing),
+    totalCost: computeTotalCost({ ...form, jerseys }, pricing),
     updatedAt: serverTimestamp(),
   }
 

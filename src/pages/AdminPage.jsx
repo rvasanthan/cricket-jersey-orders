@@ -275,10 +275,8 @@ function AdminPanel() {
                 <tr>
                   <th scope="col">Order #</th>
                   <th scope="col">Player</th>
-                  <th scope="col">Jersey</th>
-                  <th scope="col">Sleeve</th>
-                  <th scope="col">Qty</th>
-                  <th scope="col">Add-on</th>
+                  <th scope="col">Jerseys</th>
+                  <th scope="col">Total Qty</th>
                   <th scope="col">Hat</th>
                   <th scope="col">Pants</th>
                   <th scope="col">Cost</th>
@@ -287,57 +285,70 @@ function AdminPanel() {
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.map((order) => (
-                  <tr key={order.id}>
-                    <td data-label="Order #">{order.orderNumber}</td>
-                    <td data-label="Player">
-                      {order.firstName} {order.lastName} ({order.shortName})
-                    </td>
-                    <td data-label="Jersey">
-                      #{order.jerseyNumber} / {order.jerseySize} / {order.jerseyColor}
-                    </td>
-                    <td data-label="Sleeve">{order.sleeveType}</td>
-                    <td data-label="Qty">{order.quantity}</td>
-                    <td data-label="Add-on">
-                      {order.jerseyColor === 'Red' && (order.needDragon ? 'Dragon' : '—')}
-                      {order.jerseyColor === 'Blue' && (order.needBlueWhale ? 'Blue Whale' : '—')}
-                    </td>
-                    <td data-label="Hat">{order.needHat ? order.hatSize : '—'}</td>
-                    <td data-label="Pants">{order.needPants ? order.pantsSize : '—'}</td>
-                    <td data-label="Cost">${order.totalCost?.toFixed(2)}</td>
-                    <td data-label="Status">
-                      <label htmlFor={`status-${order.id}`} className="visually-hidden">
-                        Status for order {order.orderNumber}
-                      </label>
-                      <select
-                        id={`status-${order.id}`}
-                        value={order.status}
-                        onChange={(e) => handleStatusChange(order, e.target.value)}
-                      >
-                        {ORDER_STATUSES.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td data-label="Actions" className="actions-cell">
-                      <button type="button" className="btn btn--outline btn--sm" onClick={() => setEditingOrder(order)}>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--danger btn--sm"
-                        onClick={() => setPendingDelete(order)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filteredOrders.map((order) => {
+                  const jerseys = order.jerseys || []
+                  const totalQty = jerseys.reduce((sum, j) => sum + (Number(j.quantity) || 1), 0)
+                  return (
+                    <tr key={order.id}>
+                      <td data-label="Order #">{order.orderNumber}</td>
+                      <td data-label="Player">
+                        {order.firstName} {order.lastName} ({order.shortName} · #{order.jerseyNumber})
+                      </td>
+                      <td data-label="Jerseys">
+                        {jerseys.map((j, i) => {
+                          const addon =
+                            j.jerseyColor === 'Red'
+                              ? j.needDragon
+                                ? ' + Dragon'
+                                : ''
+                              : j.needBlueWhale
+                                ? ' + Blue Whale'
+                                : ''
+                          return (
+                            <div key={i}>
+                              {j.jerseyColor} · Size {j.jerseySize} · {j.sleeveType}{addon} (Qty: {j.quantity})
+                            </div>
+                          )
+                        })}
+                      </td>
+                      <td data-label="Total Qty">{totalQty}</td>
+                      <td data-label="Hat">{order.needHat ? order.hatSize : '—'}</td>
+                      <td data-label="Pants">{order.needPants ? order.pantsSize : '—'}</td>
+                      <td data-label="Cost">${order.totalCost?.toFixed(2)}</td>
+                      <td data-label="Status">
+                        <label htmlFor={`status-${order.id}`} className="visually-hidden">
+                          Status for order {order.orderNumber}
+                        </label>
+                        <select
+                          id={`status-${order.id}`}
+                          value={order.status}
+                          onChange={(e) => handleStatusChange(order, e.target.value)}
+                        >
+                          {ORDER_STATUSES.map((s) => (
+                            <option key={s.value} value={s.value}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td data-label="Actions" className="actions-cell">
+                        <button type="button" className="btn btn--outline btn--sm" onClick={() => setEditingOrder(order)}>
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--danger btn--sm"
+                          onClick={() => setPendingDelete(order)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
                 {filteredOrders.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="empty-row">
+                    <td colSpan={9} className="empty-row">
                       No orders match your filter.
                     </td>
                   </tr>

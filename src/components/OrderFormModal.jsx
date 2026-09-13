@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
-import { JERSEY_COLORS, SIZES, SLEEVE_TYPES, validateForm } from '../utils/validation'
+import {
+  JERSEY_COLORS,
+  SIZES,
+  SLEEVE_TYPES,
+  validateJerseyItem,
+  validatePlayerDetails,
+} from '../utils/validation'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { checkFieldAvailability, createOrder, updateOrder } from '../services/ordersService'
 
@@ -9,11 +15,7 @@ const FIELD_LABELS = {
   shortName: 'Short name',
 }
 
-const EMPTY_JERSEY = {
-  firstName: '',
-  lastName: '',
-  shortName: '',
-  jerseyNumber: '',
+const DEFAULT_JERSEY_ITEM = {
   jerseySize: 'M',
   jerseyColor: 'Red',
   sleeveType: 'Half Sleeve',
@@ -22,55 +24,84 @@ const EMPTY_JERSEY = {
   needBlueWhale: false,
 }
 
-const EMPTY_HAT = { hatSize: 'M' }
-const EMPTY_PANTS = { pantsSize: 'M' }
+const DEFAULT_HAT = { hatSize: 'M' }
+const DEFAULT_PANTS = { pantsSize: 'M' }
 
-// Decomposes a flat order record (as stored in Firestore) into cart items for editing.
 function decomposeCart(initialForm, mode) {
   if (mode !== 'edit' || !initialForm) {
-    return { jersey: null, hat: null, pants: null }
+    return {
+      player: { firstName: '', lastName: '', shortName: '', jerseyNumber: '' },
+      jerseys: [],
+      hat: null,
+      pants: null,
+    }
   }
-  const jersey = {
-    firstName: initialForm.firstName,
-    lastName: initialForm.lastName,
-    shortName: initialForm.shortName,
-    jerseyNumber: initialForm.jerseyNumber,
-    jerseySize: initialForm.jerseySize,
-    jerseyColor: initialForm.jerseyColor,
-    sleeveType: initialForm.sleeveType,
-    quantity: initialForm.quantity,
-    needDragon: initialForm.needDragon,
-    needBlueWhale: initialForm.needBlueWhale,
+  const player = {
+    firstName: initialForm.firstName || '',
+    lastName: initialForm.lastName || '',
+    shortName: initialForm.shortName || '',
+    jerseyNumber: initialForm.jerseyNumber || '',
   }
+  const jerseys =
+    Array.isArray(initialForm.jerseys) && initialForm.jerseys.length > 0
+      ? initialForm.jerseys
+      : [
+          {
+            jerseySize: initialForm.jerseySize || 'M',
+            jerseyColor: initialForm.jerseyColor || 'Red',
+            sleeveType: initialForm.sleeveType || 'Half Sleeve',
+            quantity: initialForm.quantity || 1,
+            needDragon: Boolean(initialForm.needDragon),
+            needBlueWhale: Boolean(initialForm.needBlueWhale),
+          },
+        ]
+
   return {
-    jersey,
-    hat: initialForm.needHat ? { hatSize: initialForm.hatSize } : null,
-    pants: initialForm.needPants ? { pantsSize: initialForm.pantsSize } : null,
+    player,
+    jerseys,
+    hat: initialForm.needHat ? { hatSize: initialForm.hatSize || 'M' } : null,
+    pants: initialForm.needPants ? { pantsSize: initialForm.pantsSize || 'M' } : null,
   }
 }
 
-function summarizeJersey(j) {
-  const addon = j.jerseyColor === 'Red' ? (j.needDragon ? ' · Dragon' : '') : j.needBlueWhale ? ' · Blue Whale' : ''
-  return `#${j.jerseyNumber} · ${j.firstName} ${j.lastName} ("${j.shortName}") · ${j.jerseyColor} · Size ${j.jerseySize} · ${j.sleeveType} · Qty ${j.quantity}${addon}`
+function summarizeJerseyItem(j) {
+  const addon =
+    j.jerseyColor === 'Red'
+      ? j.needDragon
+        ? ' · Dragon'
+        : ''
+      : j.needBlueWhale
+        ? ' · Blue Whale'
+        : ''
+  return `${j.jerseyColor} · Size ${j.jerseySize} · ${j.sleeveType} · Qty ${j.quantity}${addon}`
 }
 
 export default function OrderFormModal({ mode, initialForm, orderId, onClose, onSaved }) {
-  const [cart, setCart] = useState(() => decomposeCart(initialForm, mode))
-  const [step, setStep] = useState(mode === 'edit' ? 'cart' : 'jersey')
-  const [jerseyDraft, setJerseyDraft] = useState(() => decomposeCart(initialForm, mode).jersey ?? EMPTY_JERSEY)
-  const [hatDraft, setHatDraft] = useState(() => decomposeCart(initialForm, mode).hat ?? EMPTY_HAT)
-  const [pantsDraft, setPantsDraft] = useState(() => decomposeCart(initialForm, mode).pants ?? EMPTY_PANTS)
-  const [errors, setErrors] = useState({})
+  const initial = decomposeCart(initialForm, mode)
+  const [player, setPlayer] = useState(initial.player)
+  const [jerseys, setJerseys] = useState(initial.jerseys)
+  const [hat, setHat] = useState(initial.hat)
+  const [pants, setPants] = useState(initial.pants)
+
+  const [step, setStep] = useState('cart') // cart | jersey | hat | pants | review
+  const [editingJerseyIndex, setEditingJerseyIndex] = useState(null)
+  const [jerseyDraft, setJerseyDraft] = useState(DEFAULT_JERSEY_ITEM)
+  const [hatDraft, setHatDraft] = useState(DEFAULT_HAT)
+  const [pantsDraft, setPantsDraft] = useState(DEFAULT_PANTS)
+
+  const [playerErrors, setPlayerErrors] = useState({})
+  const [jerseyErrors, setJerseyErrors] = useState({})
+  const [cartError, setCartError] = useState('')
   const [fieldStatus, setFieldStatus] = useState({ jerseyNumber: null, shortName: null })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
-  const debouncedJerseyNumber = useDebouncedValue(jerseyDraft.jerseyNumber)
-  const debouncedShortName = useDebouncedValue(jerseyDraft.shortName)
+  const debouncedJerseyNumber = useDebouncedValue(player.jerseyNumber)
+  const debouncedShortName = useDebouncedValue(player.shortName)
 
   useEffect(() => {
     let active = true
-    if (!jerseyDraft.jerseyNumber.toString().trim()) {
+    if (!player.jerseyNumber.toString().trim()) {
       setFieldStatus((s) => ({ ...s, jerseyNumber: null }))
       return
     }
@@ -86,7 +117,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
 
   useEffect(() => {
     let active = true
-    if (!jerseyDraft.shortName.trim()) {
+    if (!player.shortName.trim()) {
       setFieldStatus((s) => ({ ...s, shortName: null }))
       return
     }
@@ -100,51 +131,86 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedShortName])
 
-  function updateJerseyField(name, value) {
-    setJerseyDraft((f) => ({ ...f, [name]: value }))
+  function updatePlayerField(name, value) {
+    setPlayer((p) => ({ ...p, [name]: value }))
   }
 
-  function openJerseyStep() {
-    setJerseyDraft(cart.jersey ?? EMPTY_JERSEY)
-    setErrors({})
-    setSubmitError('')
+  function updateJerseyDraft(name, value) {
+    setJerseyDraft((j) => ({ ...j, [name]: value }))
+  }
+
+  function openAddJersey() {
+    setEditingJerseyIndex(null)
+    setJerseyDraft(DEFAULT_JERSEY_ITEM)
+    setJerseyErrors({})
     setStep('jersey')
   }
 
-  function openHatStep() {
-    setHatDraft(cart.hat ?? EMPTY_HAT)
-    setStep('hat')
+  function openEditJersey(index) {
+    setEditingJerseyIndex(index)
+    setJerseyDraft(jerseys[index])
+    setJerseyErrors({})
+    setStep('jersey')
   }
 
-  function openPantsStep() {
-    setPantsDraft(cart.pants ?? EMPTY_PANTS)
-    setStep('pants')
-  }
-
-  function handleAddJerseyToOrder(event) {
+  function handleSaveJersey(event) {
     event.preventDefault()
-    const validationErrors = validateForm(jerseyDraft)
-    if (fieldStatus.jerseyNumber === 'taken') {
-      validationErrors.jerseyNumber = 'That jersey number is already taken.'
-    }
-    if (fieldStatus.shortName === 'taken') {
-      validationErrors.shortName = 'That short name is already taken.'
-    }
-    setErrors(validationErrors)
-    if (Object.keys(validationErrors).length === 0) {
-      setCart((c) => ({ ...c, jersey: jerseyDraft }))
+    const errs = validateJerseyItem(jerseyDraft)
+    setJerseyErrors(errs)
+    if (Object.keys(errs).length === 0) {
+      if (editingJerseyIndex !== null) {
+        setJerseys((list) => list.map((item, i) => (i === editingJerseyIndex ? jerseyDraft : item)))
+      } else {
+        setJerseys((list) => [...list, jerseyDraft])
+      }
+      setCartError('')
       setStep('cart')
     }
   }
 
-  function handleAddHatToOrder() {
-    setCart((c) => ({ ...c, hat: hatDraft }))
+  function handleRemoveJersey(index) {
+    setJerseys((list) => list.filter((_, i) => i !== index))
+  }
+
+  function openHatStep() {
+    setHatDraft(hat ?? DEFAULT_HAT)
+    setStep('hat')
+  }
+
+  function openPantsStep() {
+    setPantsDraft(pants ?? DEFAULT_PANTS)
+    setStep('pants')
+  }
+
+  function handleSaveHat() {
+    setHat(hatDraft)
     setStep('cart')
   }
 
-  function handleAddPantsToOrder() {
-    setCart((c) => ({ ...c, pants: pantsDraft }))
+  function handleSavePants() {
+    setPants(pantsDraft)
     setStep('cart')
+  }
+
+  function handleGoToReview() {
+    const errs = validatePlayerDetails(player)
+    if (fieldStatus.jerseyNumber === 'taken') {
+      errs.jerseyNumber = 'That jersey number is already taken.'
+    }
+    if (fieldStatus.shortName === 'taken') {
+      errs.shortName = 'That short name is already taken.'
+    }
+    setPlayerErrors(errs)
+
+    if (jerseys.length === 0) {
+      setCartError('Please add at least 1 jersey item to your order.')
+      return
+    }
+    setCartError('')
+
+    if (Object.keys(errs).length === 0) {
+      setStep('review')
+    }
   }
 
   async function handleSubmitOrder() {
@@ -152,11 +218,12 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
     setSubmitError('')
     try {
       const combinedForm = {
-        ...cart.jersey,
-        needHat: Boolean(cart.hat),
-        hatSize: cart.hat?.hatSize ?? 'M',
-        needPants: Boolean(cart.pants),
-        pantsSize: cart.pants?.pantsSize ?? 'M',
+        ...player,
+        jerseys,
+        needHat: Boolean(hat),
+        hatSize: hat?.hatSize ?? 'M',
+        needPants: Boolean(pants),
+        pantsSize: pants?.pantsSize ?? 'M',
       }
       const result =
         mode === 'edit' ? await updateOrder(orderId, combinedForm) : await createOrder(combinedForm)
@@ -179,15 +246,15 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
 
   const title =
     step === 'jersey'
-      ? cart.jersey
+      ? editingJerseyIndex !== null
         ? 'Edit Jersey'
         : 'Add Jersey'
       : step === 'hat'
-        ? cart.hat
+        ? hat
           ? 'Edit Hat'
           : 'Add Hat'
         : step === 'pants'
-          ? cart.pants
+          ? pants
             ? 'Edit Pants'
             : 'Add Pants'
           : step === 'review'
@@ -200,30 +267,121 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
     <Modal title={title} onClose={onClose}>
       {step === 'cart' && (
         <div>
-          <p className="muted">
-            Add each item to your order, then review and submit when you&rsquo;re ready.
-          </p>
-          <div className="cart-list">
+          <fieldset className="fieldset">
+            <legend>Player Details</legend>
+            <div className="form-grid">
+              <Field
+                label="First Name"
+                id="firstName"
+                value={player.firstName}
+                onChange={(v) => updatePlayerField('firstName', v)}
+                error={playerErrors.firstName}
+                required
+              />
+              <Field
+                label="Last Name"
+                id="lastName"
+                value={player.lastName}
+                onChange={(v) => updatePlayerField('lastName', v)}
+                error={playerErrors.lastName}
+                required
+              />
+              <Field
+                label="Short Name"
+                id="shortName"
+                value={player.shortName}
+                onChange={(v) => updatePlayerField('shortName', v)}
+                error={playerErrors.shortName}
+                hint="Shown on jersey back. Must be unique."
+                status={fieldStatus.shortName}
+                required
+              />
+              <Field
+                label="Jersey Number"
+                id="jerseyNumber"
+                value={player.jerseyNumber}
+                onChange={(v) =>
+                  updatePlayerField('jerseyNumber', v.replace(/[^\d]/g, '').slice(0, 3))
+                }
+                error={playerErrors.jerseyNumber}
+                hint="Must be unique across the team."
+                status={fieldStatus.jerseyNumber}
+                inputMode="numeric"
+                required
+              />
+            </div>
+          </fieldset>
+
+          <div className="cart-section">
+            <div className="cart-section__header">
+              <h3>
+                Jerseys <span className="muted">(At least 1 required)</span>
+              </h3>
+              <button type="button" className="btn btn--outline btn--sm" onClick={openAddJersey}>
+                + Add Jersey
+              </button>
+            </div>
+
+            {jerseys.length === 0 ? (
+              <p className="cart-empty-msg">
+                No jerseys added yet. Click &quot;+ Add Jersey&quot; to choose colors, sizes, and sleeves.
+              </p>
+            ) : (
+              <div className="cart-list">
+                {jerseys.map((item, idx) => (
+                  <div key={idx} className="cart-item">
+                    <div className="cart-item__info">
+                      <p className="cart-item__label">Jersey #{idx + 1}</p>
+                      <p className="cart-item__summary">{summarizeJerseyItem(item)}</p>
+                    </div>
+                    <div className="cart-item__actions">
+                      <button
+                        type="button"
+                        className="btn btn--outline btn--sm"
+                        onClick={() => openEditJersey(idx)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--danger btn--sm"
+                        onClick={() => handleRemoveJersey(idx)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {cartError && (
+              <p className="field-error" role="alert">
+                {cartError}
+              </p>
+            )}
+          </div>
+
+          <div className="cart-section">
+            <div className="cart-section__header">
+              <h3>Hat</h3>
+            </div>
             <CartItemRow
-              label="Jersey"
-              required
-              summary={cart.jersey ? summarizeJersey(cart.jersey) : null}
-              onAdd={openJerseyStep}
-              onEdit={openJerseyStep}
-            />
-            <CartItemRow
-              label="Hat"
-              summary={cart.hat ? `Size ${cart.hat.hatSize}` : null}
+              summary={hat ? `Size ${hat.hatSize}` : null}
               onAdd={openHatStep}
               onEdit={openHatStep}
-              onRemove={() => setCart((c) => ({ ...c, hat: null }))}
+              onRemove={() => setHat(null)}
             />
+          </div>
+
+          <div className="cart-section">
+            <div className="cart-section__header">
+              <h3>Track Pants</h3>
+            </div>
             <CartItemRow
-              label="Pants"
-              summary={cart.pants ? `Size ${cart.pants.pantsSize}` : null}
+              summary={pants ? `Size ${pants.pantsSize}` : null}
               onAdd={openPantsStep}
               onEdit={openPantsStep}
-              onRemove={() => setCart((c) => ({ ...c, pants: null }))}
+              onRemove={() => setPants(null)}
             />
           </div>
 
@@ -237,12 +395,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
             <button type="button" className="btn btn--ghost" onClick={onClose}>
               Cancel
             </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={!cart.jersey}
-              onClick={() => setStep('review')}
-            >
+            <button type="button" className="btn btn--primary" onClick={handleGoToReview}>
               Review Order
             </button>
           </div>
@@ -250,57 +403,14 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
       )}
 
       {step === 'jersey' && (
-        <form onSubmit={handleAddJerseyToOrder} noValidate>
+        <form onSubmit={handleSaveJersey} noValidate>
           <div className="form-grid">
-            <Field
-              label="First Name"
-              id="firstName"
-              value={jerseyDraft.firstName}
-              onChange={(v) => updateJerseyField('firstName', v)}
-              error={errors.firstName}
-              required
-            />
-            <Field
-              label="Last Name"
-              id="lastName"
-              value={jerseyDraft.lastName}
-              onChange={(v) => updateJerseyField('lastName', v)}
-              error={errors.lastName}
-              required
-            />
-            <Field
-              label="Short Name"
-              id="shortName"
-              value={jerseyDraft.shortName}
-              onChange={(v) => updateJerseyField('shortName', v)}
-              error={errors.shortName}
-              hint="Shown on the back of the jersey. Must be unique."
-              status={fieldStatus.shortName}
-              required
-            />
-            <Field
-              label="Jersey Number"
-              id="jerseyNumber"
-              value={jerseyDraft.jerseyNumber}
-              onChange={(v) => updateJerseyField('jerseyNumber', v.replace(/[^\d]/g, '').slice(0, 3))}
-              error={errors.jerseyNumber}
-              hint="Must be unique across the team."
-              status={fieldStatus.jerseyNumber}
-              inputMode="numeric"
-              required
-            />
-            <SizeSelect
-              label="Jersey Size"
-              id="jerseySize"
-              value={jerseyDraft.jerseySize}
-              onChange={(v) => updateJerseyField('jerseySize', v)}
-            />
             <div className="field">
               <label htmlFor="jerseyColor">Jersey Color</label>
               <select
                 id="jerseyColor"
                 value={jerseyDraft.jerseyColor}
-                onChange={(e) => updateJerseyField('jerseyColor', e.target.value)}
+                onChange={(e) => updateJerseyDraft('jerseyColor', e.target.value)}
               >
                 {JERSEY_COLORS.map((color) => (
                   <option key={color} value={color}>
@@ -309,6 +419,12 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
                 ))}
               </select>
             </div>
+            <SizeSelect
+              label="Jersey Size"
+              id="jerseySize"
+              value={jerseyDraft.jerseySize}
+              onChange={(v) => updateJerseyDraft('jerseySize', v)}
+            />
           </div>
 
           <fieldset className="fieldset">
@@ -320,7 +436,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
                     type="radio"
                     name="sleeveType"
                     checked={jerseyDraft.sleeveType === type}
-                    onChange={() => updateJerseyField('sleeveType', type)}
+                    onChange={() => updateJerseyDraft('sleeveType', type)}
                   />
                   {type}
                 </label>
@@ -330,14 +446,14 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
 
           {jerseyDraft.jerseyColor === 'Red' && (
             <fieldset className="fieldset">
-              <legend>Need Dragon?</legend>
+              <legend>Need Red Dragon?</legend>
               <div className="toggle-row">
                 <label className="radio">
                   <input
                     type="radio"
                     name="needDragon"
                     checked={jerseyDraft.needDragon === true}
-                    onChange={() => updateJerseyField('needDragon', true)}
+                    onChange={() => updateJerseyDraft('needDragon', true)}
                   />
                   Yes
                 </label>
@@ -346,7 +462,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
                     type="radio"
                     name="needDragon"
                     checked={jerseyDraft.needDragon === false}
-                    onChange={() => updateJerseyField('needDragon', false)}
+                    onChange={() => updateJerseyDraft('needDragon', false)}
                   />
                   No
                 </label>
@@ -363,7 +479,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
                     type="radio"
                     name="needBlueWhale"
                     checked={jerseyDraft.needBlueWhale === true}
-                    onChange={() => updateJerseyField('needBlueWhale', true)}
+                    onChange={() => updateJerseyDraft('needBlueWhale', true)}
                   />
                   Yes
                 </label>
@@ -372,7 +488,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
                     type="radio"
                     name="needBlueWhale"
                     checked={jerseyDraft.needBlueWhale === false}
-                    onChange={() => updateJerseyField('needBlueWhale', false)}
+                    onChange={() => updateJerseyDraft('needBlueWhale', false)}
                   />
                   No
                 </label>
@@ -385,8 +501,10 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
               label="How Many Jerseys?"
               id="quantity"
               value={jerseyDraft.quantity}
-              onChange={(v) => updateJerseyField('quantity', v.replace(/[^\d]/g, '').slice(0, 2))}
-              error={errors.quantity}
+              onChange={(v) =>
+                updateJerseyDraft('quantity', v.replace(/[^\d]/g, '').slice(0, 2))
+              }
+              error={jerseyErrors.quantity}
               inputMode="numeric"
               required
             />
@@ -415,7 +533,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
             <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
               Back to Order
             </button>
-            <button type="button" className="btn btn--primary" onClick={handleAddHatToOrder}>
+            <button type="button" className="btn btn--primary" onClick={handleSaveHat}>
               Add to Order
             </button>
           </div>
@@ -435,7 +553,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
             <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
               Back to Order
             </button>
-            <button type="button" className="btn btn--primary" onClick={handleAddPantsToOrder}>
+            <button type="button" className="btn btn--primary" onClick={handleSavePants}>
               Add to Order
             </button>
           </div>
@@ -444,7 +562,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
 
       {step === 'review' && (
         <div>
-          <ReviewSummary cart={cart} />
+          <ReviewSummary player={player} jerseys={jerseys} hat={hat} pants={pants} />
           {submitError && (
             <p className="form-error" role="alert">
               {submitError}
@@ -548,8 +666,7 @@ function SizeSelect({ label, id, value, onChange, compact }) {
   )
 }
 
-function ReviewSummary({ cart }) {
-  const jersey = cart.jersey
+function ReviewSummary({ player, jerseys, hat, pants }) {
   return (
     <div className="review-summary">
       <h3>Review Your Order</h3>
@@ -557,46 +674,32 @@ function ReviewSummary({ cart }) {
         <div className="review-row">
           <dt>Name</dt>
           <dd>
-            {jersey.firstName} {jersey.lastName}
+            {player.firstName} {player.lastName}
           </dd>
         </div>
         <div className="review-row">
           <dt>Short Name</dt>
-          <dd>{jersey.shortName}</dd>
+          <dd>{player.shortName}</dd>
         </div>
         <div className="review-row">
-          <dt>Jersey</dt>
+          <dt>Jersey Number</dt>
+          <dd>#{player.jerseyNumber}</dd>
+        </div>
+        <div className="review-row">
+          <dt>Jerseys ({jerseys.length})</dt>
           <dd>
-            #{jersey.jerseyNumber} · Size {jersey.jerseySize} · {jersey.jerseyColor}
+            {jerseys.map((item, idx) => (
+              <div key={idx}>{summarizeJerseyItem(item)}</div>
+            ))}
           </dd>
         </div>
         <div className="review-row">
-          <dt>Sleeve Type</dt>
-          <dd>{jersey.sleeveType}</dd>
-        </div>
-        {jersey.jerseyColor === 'Red' && (
-          <div className="review-row">
-            <dt>Dragon</dt>
-            <dd>{jersey.needDragon ? 'Yes' : 'No'}</dd>
-          </div>
-        )}
-        {jersey.jerseyColor === 'Blue' && (
-          <div className="review-row">
-            <dt>Blue Whale</dt>
-            <dd>{jersey.needBlueWhale ? 'Yes' : 'No'}</dd>
-          </div>
-        )}
-        <div className="review-row">
-          <dt>Quantity</dt>
-          <dd>{jersey.quantity}</dd>
-        </div>
-        <div className="review-row">
           <dt>Hat</dt>
-          <dd>{cart.hat ? `Yes · Size ${cart.hat.hatSize}` : 'No'}</dd>
+          <dd>{hat ? `Yes · Size ${hat.hatSize}` : 'No'}</dd>
         </div>
         <div className="review-row">
           <dt>Pants</dt>
-          <dd>{cart.pants ? `Yes · Size ${cart.pants.pantsSize}` : 'No'}</dd>
+          <dd>{pants ? `Yes · Size ${pants.pantsSize}` : 'No'}</dd>
         </div>
       </dl>
       <p className="muted">Final cost will be confirmed by the team admin.</p>

@@ -27,28 +27,40 @@ export const EMPTY_FORM = {
   pantsSize: 'M',
 }
 
-export function validateForm(form) {
+export function validatePlayerDetails(player) {
   const errors = {}
 
-  if (!form.firstName.trim()) errors.firstName = 'First name is required.'
-  if (!form.lastName.trim()) errors.lastName = 'Last name is required.'
+  if (!player.firstName || !player.firstName.trim()) errors.firstName = 'First name is required.'
+  if (!player.lastName || !player.lastName.trim()) errors.lastName = 'Last name is required.'
 
-  if (!form.shortName.trim()) {
+  if (!player.shortName || !player.shortName.trim()) {
     errors.shortName = 'Short name is required.'
-  } else if (form.shortName.trim().length > 12) {
+  } else if (player.shortName.trim().length > 12) {
     errors.shortName = 'Short name must be 12 characters or fewer.'
   }
 
-  if (!form.jerseyNumber.toString().trim()) {
+  if (!player.jerseyNumber || !player.jerseyNumber.toString().trim()) {
     errors.jerseyNumber = 'Jersey number is required.'
-  } else if (!/^\d{1,3}$/.test(form.jerseyNumber.toString().trim())) {
+  } else if (!/^\d{1,3}$/.test(player.jerseyNumber.toString().trim())) {
     errors.jerseyNumber = 'Jersey number must be 1-3 digits.'
   }
 
+  return errors
+}
+
+export function validateJerseyItem(jersey) {
+  const errors = {}
+  if (!jersey.quantity || Number(jersey.quantity) < 1 || !Number.isInteger(Number(jersey.quantity))) {
+    errors.quantity = 'Enter how many jerseys you need (1 or more).'
+  }
+  return errors
+}
+
+export function validateForm(form) {
+  const errors = validatePlayerDetails(form)
   if (!form.quantity || Number(form.quantity) < 1 || !Number.isInteger(Number(form.quantity))) {
     errors.quantity = 'Enter how many jerseys you need (1 or more).'
   }
-
   return errors
 }
 

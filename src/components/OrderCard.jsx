@@ -19,31 +19,29 @@ export default function OrderCard({ order, onEdit, onDelete }) {
 
       <dl className="order-card__details">
         <div>
-          <dt>Jersey</dt>
+          <dt>Jersey Number</dt>
+          <dd>#{order.jerseyNumber}</dd>
+        </div>
+        <div>
+          <dt>Jerseys ({(order.jerseys || []).length})</dt>
           <dd>
-            #{order.jerseyNumber} · Size {order.jerseySize} · {order.jerseyColor}
+            {(order.jerseys || []).map((j, idx) => {
+              const addon =
+                j.jerseyColor === 'Red'
+                  ? j.needDragon
+                    ? ' · Dragon'
+                    : ''
+                  : j.needBlueWhale
+                    ? ' · Blue Whale'
+                    : ''
+              return (
+                <div key={idx} className="jersey-item-summary">
+                  {j.jerseyColor} · Size {j.jerseySize} · {j.sleeveType} · Qty {j.quantity}{addon}
+                </div>
+              )
+            })}
           </dd>
         </div>
-        <div>
-          <dt>Sleeve</dt>
-          <dd>{order.sleeveType}</dd>
-        </div>
-        <div>
-          <dt>Quantity</dt>
-          <dd>{order.quantity}</dd>
-        </div>
-        {order.jerseyColor === 'Red' && (
-          <div>
-            <dt>Dragon</dt>
-            <dd>{order.needDragon ? 'Yes' : 'No'}</dd>
-          </div>
-        )}
-        {order.jerseyColor === 'Blue' && (
-          <div>
-            <dt>Blue Whale</dt>
-            <dd>{order.needBlueWhale ? 'Yes' : 'No'}</dd>
-          </div>
-        )}
         <div>
           <dt>Hat</dt>
           <dd>{order.needHat ? `Yes · Size ${order.hatSize}` : 'No'}</dd>
