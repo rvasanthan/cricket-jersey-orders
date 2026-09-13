@@ -38,13 +38,41 @@ function toOrder(docSnap) {
           },
         ]
 
+  const hats =
+    Array.isArray(data.hats)
+      ? data.hats
+      : data.needHat
+        ? [
+            {
+              hatSize: data.hatSize || 'M',
+              hatColor: data.hatColor || 'Red',
+              quantity: Math.max(1, Number(data.hatQuantity) || 1),
+            },
+          ]
+        : []
+
+  const pants =
+    Array.isArray(data.pants)
+      ? data.pants
+      : data.needPants
+        ? [
+            {
+              pantsSize: data.pantsSize || 'M',
+              pantsColor: data.pantsColor || 'Red',
+              quantity: Math.max(1, Number(data.pantsQuantity) || 1),
+            },
+          ]
+        : []
+
   return {
     id: docSnap.id,
     ...data,
     jerseys,
+    hats,
+    pants,
     hatColor: data.hatColor || 'Red',
     hatQuantity: Math.max(1, Number(data.hatQuantity) || 1),
-    pantsColor: data.pantsColor || 'Black',
+    pantsColor: data.pantsColor || 'Red',
     pantsQuantity: Math.max(1, Number(data.pantsQuantity) || 1),
     createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : null,
     updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : null,
@@ -71,14 +99,46 @@ export function computeTotalCost(form, pricing) {
     (sum, j) => sum + Math.max(1, Number(j.quantity) || 1),
     0,
   )
-  let total = pricing.jerseyPrice * totalJerseyQty
-  if (form.needHat) {
-    total += pricing.hatPrice * Math.max(1, Number(form.hatQuantity) || 1)
-  }
-  if (form.needPants) {
-    total += pricing.pantsPrice * Math.max(1, Number(form.pantsQuantity) || 1)
-  }
-  return total
+
+  const hats =
+    Array.isArray(form.hats)
+      ? form.hats
+      : form.needHat
+        ? [
+            {
+              hatSize: form.hatSize || 'M',
+              hatColor: form.hatColor || 'Red',
+              quantity: Math.max(1, Number(form.hatQuantity) || 1),
+            },
+          ]
+        : []
+  const totalHatQty = hats.reduce(
+    (sum, h) => sum + Math.max(1, Number(h.quantity) || 1),
+    0,
+  )
+
+  const pants =
+    Array.isArray(form.pants)
+      ? form.pants
+      : form.needPants
+        ? [
+            {
+              pantsSize: form.pantsSize || 'M',
+              pantsColor: form.pantsColor || 'Red',
+              quantity: Math.max(1, Number(form.pantsQuantity) || 1),
+            },
+          ]
+        : []
+  const totalPantsQty = pants.reduce(
+    (sum, p) => sum + Math.max(1, Number(p.quantity) || 1),
+    0,
+  )
+
+  return (
+    pricing.jerseyPrice * totalJerseyQty +
+    pricing.hatPrice * totalHatQty +
+    pricing.pantsPrice * totalPantsQty
+  )
 }
 
 // Finds existing orders that would collide with this form's unique fields (jersey number / short name).
@@ -151,6 +211,43 @@ export async function createOrder(form) {
   const firstJersey = jerseys[0]
   const totalJerseyQty = jerseys.reduce((sum, j) => sum + j.quantity, 0)
 
+  const hats = Array.isArray(form.hats)
+    ? form.hats.map((h) => ({
+        hatSize: h.hatSize || 'M',
+        hatColor: h.hatColor || 'Red',
+        quantity: Math.max(1, Number(h.quantity) || 1),
+      }))
+    : form.needHat
+      ? [
+          {
+            hatSize: form.hatSize || 'M',
+            hatColor: form.hatColor || 'Red',
+            quantity: Math.max(1, Number(form.hatQuantity) || 1),
+          },
+        ]
+      : []
+
+  const pants = Array.isArray(form.pants)
+    ? form.pants.map((p) => ({
+        pantsSize: p.pantsSize || 'M',
+        pantsColor: p.pantsColor || 'Red',
+        quantity: Math.max(1, Number(p.quantity) || 1),
+      }))
+    : form.needPants
+      ? [
+          {
+            pantsSize: form.pantsSize || 'M',
+            pantsColor: form.pantsColor || 'Red',
+            quantity: Math.max(1, Number(form.pantsQuantity) || 1),
+          },
+        ]
+      : []
+
+  const firstHat = hats[0]
+  const totalHatQty = hats.reduce((sum, h) => sum + h.quantity, 0)
+  const firstPants = pants[0]
+  const totalPantsQty = pants.reduce((sum, p) => sum + p.quantity, 0)
+
   const payload = {
     orderNumber,
     firstName: form.firstName.trim(),
@@ -167,15 +264,17 @@ export async function createOrder(form) {
     quantity: totalJerseyQty,
     needDragon: jerseys.some((j) => j.needDragon),
     needBlueWhale: jerseys.some((j) => j.needBlueWhale),
-    needHat: Boolean(form.needHat),
-    hatSize: form.needHat ? form.hatSize : null,
-    hatColor: form.needHat ? form.hatColor : null,
-    hatQuantity: form.needHat ? Math.max(1, Number(form.hatQuantity) || 1) : 0,
-    needPants: Boolean(form.needPants),
-    pantsSize: form.needPants ? form.pantsSize : null,
-    pantsColor: form.needPants ? form.pantsColor : null,
-    pantsQuantity: form.needPants ? Math.max(1, Number(form.pantsQuantity) || 1) : 0,
-    totalCost: computeTotalCost({ ...form, jerseys }, pricing),
+    needHat: hats.length > 0,
+    hats,
+    hatSize: firstHat ? firstHat.hatSize : null,
+    hatColor: firstHat ? firstHat.hatColor : null,
+    hatQuantity: totalHatQty,
+    needPants: pants.length > 0,
+    pants,
+    pantsSize: firstPants ? firstPants.pantsSize : null,
+    pantsColor: firstPants ? firstPants.pantsColor : null,
+    pantsQuantity: totalPantsQty,
+    totalCost: computeTotalCost({ ...form, jerseys, hats, pants }, pricing),
     status: 'pending',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -216,6 +315,43 @@ export async function updateOrder(id, form) {
   const firstJersey = jerseys[0]
   const totalJerseyQty = jerseys.reduce((sum, j) => sum + j.quantity, 0)
 
+  const hats = Array.isArray(form.hats)
+    ? form.hats.map((h) => ({
+        hatSize: h.hatSize || 'M',
+        hatColor: h.hatColor || 'Red',
+        quantity: Math.max(1, Number(h.quantity) || 1),
+      }))
+    : form.needHat
+      ? [
+          {
+            hatSize: form.hatSize || 'M',
+            hatColor: form.hatColor || 'Red',
+            quantity: Math.max(1, Number(form.hatQuantity) || 1),
+          },
+        ]
+      : []
+
+  const pants = Array.isArray(form.pants)
+    ? form.pants.map((p) => ({
+        pantsSize: p.pantsSize || 'M',
+        pantsColor: p.pantsColor || 'Red',
+        quantity: Math.max(1, Number(p.quantity) || 1),
+      }))
+    : form.needPants
+      ? [
+          {
+            pantsSize: form.pantsSize || 'M',
+            pantsColor: form.pantsColor || 'Red',
+            quantity: Math.max(1, Number(form.pantsQuantity) || 1),
+          },
+        ]
+      : []
+
+  const firstHat = hats[0]
+  const totalHatQty = hats.reduce((sum, h) => sum + h.quantity, 0)
+  const firstPants = pants[0]
+  const totalPantsQty = pants.reduce((sum, p) => sum + p.quantity, 0)
+
   const payload = {
     firstName: form.firstName.trim(),
     lastName: form.lastName.trim(),
@@ -230,15 +366,17 @@ export async function updateOrder(id, form) {
     quantity: totalJerseyQty,
     needDragon: jerseys.some((j) => j.needDragon),
     needBlueWhale: jerseys.some((j) => j.needBlueWhale),
-    needHat: Boolean(form.needHat),
-    hatSize: form.needHat ? form.hatSize : null,
-    hatColor: form.needHat ? form.hatColor : null,
-    hatQuantity: form.needHat ? Math.max(1, Number(form.hatQuantity) || 1) : 0,
-    needPants: Boolean(form.needPants),
-    pantsSize: form.needPants ? form.pantsSize : null,
-    pantsColor: form.needPants ? form.pantsColor : null,
-    pantsQuantity: form.needPants ? Math.max(1, Number(form.pantsQuantity) || 1) : 0,
-    totalCost: computeTotalCost({ ...form, jerseys }, pricing),
+    needHat: hats.length > 0,
+    hats,
+    hatSize: firstHat ? firstHat.hatSize : null,
+    hatColor: firstHat ? firstHat.hatColor : null,
+    hatQuantity: totalHatQty,
+    needPants: pants.length > 0,
+    pants,
+    pantsSize: firstPants ? firstPants.pantsSize : null,
+    pantsColor: firstPants ? firstPants.pantsColor : null,
+    pantsQuantity: totalPantsQty,
+    totalCost: computeTotalCost({ ...form, jerseys, hats, pants }, pricing),
     updatedAt: serverTimestamp(),
   }
 

@@ -43,19 +43,31 @@ export default function OrderCard({ order, onEdit, onDelete }) {
           </dd>
         </div>
         <div>
-          <dt>Hat</dt>
+          <dt>Hats ({(order.hats || (order.needHat ? [{ hatColor: order.hatColor || 'Red', hatSize: order.hatSize || 'M', quantity: order.hatQuantity || 1 }] : [])).length})</dt>
           <dd>
-            {order.needHat
-              ? `Yes · ${order.hatColor || 'Red'} · Size ${order.hatSize} · Qty ${order.hatQuantity || 1}`
-              : 'No'}
+            {(order.hats && order.hats.length > 0)
+              ? order.hats.map((h, idx) => (
+                  <div key={idx} className="jersey-item-summary">
+                    {h.hatColor} · Size {h.hatSize} · Qty {h.quantity}
+                  </div>
+                ))
+              : order.needHat
+                ? `${order.hatColor || 'Red'} · Size ${order.hatSize} · Qty ${order.hatQuantity || 1}`
+                : 'No'}
           </dd>
         </div>
         <div>
-          <dt>Pants</dt>
+          <dt>Pants ({(order.pants || (order.needPants ? [{ pantsColor: order.pantsColor || 'Red', pantsSize: order.pantsSize || 'M', quantity: order.pantsQuantity || 1 }] : [])).length})</dt>
           <dd>
-            {order.needPants
-              ? `Yes · ${order.pantsColor || 'Black'} · Size ${order.pantsSize} · Qty ${order.pantsQuantity || 1}`
-              : 'No'}
+            {(order.pants && order.pants.length > 0)
+              ? order.pants.map((p, idx) => (
+                  <div key={idx} className="jersey-item-summary">
+                    {p.pantsColor} · Size {p.pantsSize} · Qty {p.quantity}
+                  </div>
+                ))
+              : order.needPants
+                ? `${order.pantsColor || 'Red'} · Size ${order.pantsSize} · Qty ${order.pantsQuantity || 1}`
+                : 'No'}
           </dd>
         </div>
         <div>

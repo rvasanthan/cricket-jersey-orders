@@ -6,7 +6,9 @@ import {
   PANTS_COLORS,
   SIZES,
   SLEEVE_TYPES,
+  validateHatItem,
   validateJerseyItem,
+  validatePantsItem,
   validatePlayerDetails,
 } from '../utils/validation'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
@@ -26,16 +28,16 @@ const DEFAULT_JERSEY_ITEM = {
   needBlueWhale: false,
 }
 
-const DEFAULT_HAT = { hatSize: 'M', hatColor: 'Red', quantity: 1 }
-const DEFAULT_PANTS = { pantsSize: 'M', pantsColor: 'Black', quantity: 1 }
+const DEFAULT_HAT_ITEM = { hatSize: 'M', hatColor: 'Red', quantity: 1 }
+const DEFAULT_PANTS_ITEM = { pantsSize: 'M', pantsColor: 'Red', quantity: 1 }
 
 function decomposeCart(initialForm, mode) {
   if (mode !== 'edit' || !initialForm) {
     return {
       player: { firstName: '', lastName: '', shortName: '', jerseyNumber: '' },
       jerseys: [],
-      hat: null,
-      pants: null,
+      hats: [],
+      pants: [],
     }
   }
   const player = {
@@ -58,23 +60,37 @@ function decomposeCart(initialForm, mode) {
           },
         ]
 
+  const hats =
+    Array.isArray(initialForm.hats) && initialForm.hats.length > 0
+      ? initialForm.hats
+      : initialForm.needHat
+        ? [
+            {
+              hatSize: initialForm.hatSize || 'M',
+              hatColor: initialForm.hatColor || 'Red',
+              quantity: Math.max(1, Number(initialForm.hatQuantity) || 1),
+            },
+          ]
+        : []
+
+  const pants =
+    Array.isArray(initialForm.pants) && initialForm.pants.length > 0
+      ? initialForm.pants
+      : initialForm.needPants
+        ? [
+            {
+              pantsSize: initialForm.pantsSize || 'M',
+              pantsColor: initialForm.pantsColor || 'Red',
+              quantity: Math.max(1, Number(initialForm.pantsQuantity) || 1),
+            },
+          ]
+        : []
+
   return {
     player,
     jerseys,
-    hat: initialForm.needHat
-      ? {
-          hatSize: initialForm.hatSize || 'M',
-          hatColor: initialForm.hatColor || 'Red',
-          quantity: Math.max(1, Number(initialForm.hatQuantity) || 1),
-        }
-      : null,
-    pants: initialForm.needPants
-      ? {
-          pantsSize: initialForm.pantsSize || 'M',
-          pantsColor: initialForm.pantsColor || 'Black',
-          quantity: Math.max(1, Number(initialForm.pantsQuantity) || 1),
-        }
-      : null,
+    hats,
+    pants,
   }
 }
 
@@ -90,22 +106,36 @@ function summarizeJerseyItem(j) {
   return `${j.jerseyColor} · Size ${j.jerseySize} · ${j.sleeveType} · Qty ${j.quantity}${addon}`
 }
 
+function summarizeHatItem(h) {
+  return `${h.hatColor} · Size ${h.hatSize} · Qty ${h.quantity}`
+}
+
+function summarizePantsItem(p) {
+  return `${p.pantsColor} · Size ${p.pantsSize} · Qty ${p.quantity}`
+}
+
 export default function OrderFormModal({ mode, initialForm, orderId, onClose, onSaved }) {
   const initial = decomposeCart(initialForm, mode)
   const [player, setPlayer] = useState(initial.player)
   const [jerseys, setJerseys] = useState(initial.jerseys)
-  const [hat, setHat] = useState(initial.hat)
+  const [hats, setHats] = useState(initial.hats)
   const [pants, setPants] = useState(initial.pants)
 
   const [step, setStep] = useState('cart') // cart | jersey | hat | pants | review
   const [editingJerseyIndex, setEditingJerseyIndex] = useState(null)
+  const [editingHatIndex, setEditingHatIndex] = useState(null)
+  const [editingPantsIndex, setEditingPantsIndex] = useState(null)
+
   const [jerseyDraft, setJerseyDraft] = useState(DEFAULT_JERSEY_ITEM)
-  const [hatDraft, setHatDraft] = useState(DEFAULT_HAT)
-  const [pantsDraft, setPantsDraft] = useState(DEFAULT_PANTS)
+  const [hatDraft, setHatDraft] = useState(DEFAULT_HAT_ITEM)
+  const [pantsDraft, setPantsDraft] = useState(DEFAULT_PANTS_ITEM)
 
   const [playerErrors, setPlayerErrors] = useState({})
   const [jerseyErrors, setJerseyErrors] = useState({})
+  const [hatErrors, setHatErrors] = useState({})
+  const [pantsErrors, setPantsErrors] = useState({})
   const [cartError, setCartError] = useState('')
+
   const [fieldStatus, setFieldStatus] = useState({ jerseyNumber: null, shortName: null })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -153,6 +183,14 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
     setJerseyDraft((j) => ({ ...j, [name]: value }))
   }
 
+  function updateHatDraft(name, value) {
+    setHatDraft((h) => ({ ...h, [name]: value }))
+  }
+
+  function updatePantsDraft(name, value) {
+    setPantsDraft((p) => ({ ...p, [name]: value }))
+  }
+
   function openAddJersey() {
     setEditingJerseyIndex(null)
     setJerseyDraft(DEFAULT_JERSEY_ITEM)
@@ -186,24 +224,68 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
     setJerseys((list) => list.filter((_, i) => i !== index))
   }
 
-  function openHatStep() {
-    setHatDraft(hat ?? DEFAULT_HAT)
+  function openAddHat() {
+    setEditingHatIndex(null)
+    setHatDraft(DEFAULT_HAT_ITEM)
+    setHatErrors({})
     setStep('hat')
   }
 
-  function openPantsStep() {
-    setPantsDraft(pants ?? DEFAULT_PANTS)
+  function openEditHat(index) {
+    setEditingHatIndex(index)
+    setHatDraft(hats[index])
+    setHatErrors({})
+    setStep('hat')
+  }
+
+  function handleSaveHat(event) {
+    event.preventDefault()
+    const errs = validateHatItem(hatDraft)
+    setHatErrors(errs)
+    if (Object.keys(errs).length === 0) {
+      if (editingHatIndex !== null) {
+        setHats((list) => list.map((item, i) => (i === editingHatIndex ? hatDraft : item)))
+      } else {
+        setHats((list) => [...list, hatDraft])
+      }
+      setStep('cart')
+    }
+  }
+
+  function handleRemoveHat(index) {
+    setHats((list) => list.filter((_, i) => i !== index))
+  }
+
+  function openAddPants() {
+    setEditingPantsIndex(null)
+    setPantsDraft(DEFAULT_PANTS_ITEM)
+    setPantsErrors({})
     setStep('pants')
   }
 
-  function handleSaveHat() {
-    setHat(hatDraft)
-    setStep('cart')
+  function openEditPants(index) {
+    setEditingPantsIndex(index)
+    setPantsDraft(pants[index])
+    setPantsErrors({})
+    setStep('pants')
   }
 
-  function handleSavePants() {
-    setPants(pantsDraft)
-    setStep('cart')
+  function handleSavePants(event) {
+    event.preventDefault()
+    const errs = validatePantsItem(pantsDraft)
+    setPantsErrors(errs)
+    if (Object.keys(errs).length === 0) {
+      if (editingPantsIndex !== null) {
+        setPants((list) => list.map((item, i) => (i === editingPantsIndex ? pantsDraft : item)))
+      } else {
+        setPants((list) => [...list, pantsDraft])
+      }
+      setStep('cart')
+    }
+  }
+
+  function handleRemovePants(index) {
+    setPants((list) => list.filter((_, i) => i !== index))
   }
 
   function handleGoToReview() {
@@ -234,14 +316,8 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
       const combinedForm = {
         ...player,
         jerseys,
-        needHat: Boolean(hat),
-        hatSize: hat?.hatSize ?? 'M',
-        hatColor: hat?.hatColor ?? 'Red',
-        hatQuantity: Math.max(1, Number(hat?.quantity) || 1),
-        needPants: Boolean(pants),
-        pantsSize: pants?.pantsSize ?? 'M',
-        pantsColor: pants?.pantsColor ?? 'Black',
-        pantsQuantity: Math.max(1, Number(pants?.quantity) || 1),
+        hats,
+        pants,
       }
       const result =
         mode === 'edit' ? await updateOrder(orderId, combinedForm) : await createOrder(combinedForm)
@@ -268,13 +344,13 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
         ? 'Edit Jersey'
         : 'Add Jersey'
       : step === 'hat'
-        ? hat
+        ? editingHatIndex !== null
           ? 'Edit Hat'
           : 'Add Hat'
         : step === 'pants'
-          ? pants
-            ? 'Edit Pants'
-            : 'Add Pants'
+          ? editingPantsIndex !== null
+            ? 'Edit Track Pants'
+            : 'Add Track Pants'
           : step === 'review'
             ? 'Review Order'
             : mode === 'edit'
@@ -381,26 +457,82 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
 
           <div className="cart-section">
             <div className="cart-section__header">
-              <h3>Hat</h3>
+              <h3>Hats</h3>
+              <button type="button" className="btn btn--outline btn--sm" onClick={openAddHat}>
+                + Add Hat
+              </button>
             </div>
-            <CartItemRow
-              summary={hat ? `${hat.hatColor} · Size ${hat.hatSize} · Qty ${hat.quantity}` : null}
-              onAdd={openHatStep}
-              onEdit={openHatStep}
-              onRemove={() => setHat(null)}
-            />
+
+            {hats.length === 0 ? (
+              <p className="cart-empty-msg">No hats added yet.</p>
+            ) : (
+              <div className="cart-list">
+                {hats.map((item, idx) => (
+                  <div key={idx} className="cart-item">
+                    <div className="cart-item__info">
+                      <p className="cart-item__label">Hat #{idx + 1}</p>
+                      <p className="cart-item__summary">{summarizeHatItem(item)}</p>
+                    </div>
+                    <div className="cart-item__actions">
+                      <button
+                        type="button"
+                        className="btn btn--outline btn--sm"
+                        onClick={() => openEditHat(idx)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--danger btn--sm"
+                        onClick={() => handleRemoveHat(idx)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="cart-section">
             <div className="cart-section__header">
               <h3>Track Pants</h3>
+              <button type="button" className="btn btn--outline btn--sm" onClick={openAddPants}>
+                + Add Pants
+              </button>
             </div>
-            <CartItemRow
-              summary={pants ? `${pants.pantsColor} · Size ${pants.pantsSize} · Qty ${pants.quantity}` : null}
-              onAdd={openPantsStep}
-              onEdit={openPantsStep}
-              onRemove={() => setPants(null)}
-            />
+
+            {pants.length === 0 ? (
+              <p className="cart-empty-msg">No track pants added yet.</p>
+            ) : (
+              <div className="cart-list">
+                {pants.map((item, idx) => (
+                  <div key={idx} className="cart-item">
+                    <div className="cart-item__info">
+                      <p className="cart-item__label">Pants #{idx + 1}</p>
+                      <p className="cart-item__summary">{summarizePantsItem(item)}</p>
+                    </div>
+                    <div className="cart-item__actions">
+                      <button
+                        type="button"
+                        className="btn btn--outline btn--sm"
+                        onClick={() => openEditPants(idx)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--danger btn--sm"
+                        onClick={() => handleRemovePants(idx)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {submitError && (
@@ -540,14 +672,14 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
       )}
 
       {step === 'hat' && (
-        <div>
+        <form onSubmit={handleSaveHat} noValidate>
           <div className="form-grid">
             <div className="field">
               <label htmlFor="hatColor">Hat Color</label>
               <select
                 id="hatColor"
                 value={hatDraft.hatColor}
-                onChange={(e) => setHatDraft((h) => ({ ...h, hatColor: e.target.value }))}
+                onChange={(e) => updateHatDraft('hatColor', e.target.value)}
               >
                 {HAT_COLORS.map((color) => (
                   <option key={color} value={color}>
@@ -560,18 +692,14 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
               label="Hat Size"
               id="hatSize"
               value={hatDraft.hatSize}
-              onChange={(v) => setHatDraft((h) => ({ ...h, hatSize: v }))}
+              onChange={(v) => updateHatDraft('hatSize', v)}
             />
             <Field
               label="How Many Hats?"
               id="hatQuantity"
               value={hatDraft.quantity}
-              onChange={(v) =>
-                setHatDraft((h) => ({
-                  ...h,
-                  quantity: v.replace(/[^\d]/g, '').slice(0, 2),
-                }))
-              }
+              onChange={(v) => updateHatDraft('quantity', v.replace(/[^\d]/g, '').slice(0, 2))}
+              error={hatErrors.quantity}
               inputMode="numeric"
               required
             />
@@ -580,15 +708,15 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
             <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
               Back to Order
             </button>
-            <button type="button" className="btn btn--primary" onClick={handleSaveHat}>
+            <button type="submit" className="btn btn--primary">
               Add to Order
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {step === 'pants' && (
-        <div>
+        <form onSubmit={handleSavePants} noValidate>
           <p className="muted">Cost assessed based on order.</p>
           <div className="form-grid">
             <div className="field">
@@ -596,7 +724,7 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
               <select
                 id="pantsColor"
                 value={pantsDraft.pantsColor}
-                onChange={(e) => setPantsDraft((p) => ({ ...p, pantsColor: e.target.value }))}
+                onChange={(e) => updatePantsDraft('pantsColor', e.target.value)}
               >
                 {PANTS_COLORS.map((color) => (
                   <option key={color} value={color}>
@@ -609,18 +737,14 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
               label="Pants Size"
               id="pantsSize"
               value={pantsDraft.pantsSize}
-              onChange={(v) => setPantsDraft((p) => ({ ...p, pantsSize: v }))}
+              onChange={(v) => updatePantsDraft('pantsSize', v)}
             />
             <Field
               label="How Many Pants?"
               id="pantsQuantity"
               value={pantsDraft.quantity}
-              onChange={(v) =>
-                setPantsDraft((p) => ({
-                  ...p,
-                  quantity: v.replace(/[^\d]/g, '').slice(0, 2),
-                }))
-              }
+              onChange={(v) => updatePantsDraft('quantity', v.replace(/[^\d]/g, '').slice(0, 2))}
+              error={pantsErrors.quantity}
               inputMode="numeric"
               required
             />
@@ -629,16 +753,16 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
             <button type="button" className="btn btn--ghost" onClick={() => setStep('cart')}>
               Back to Order
             </button>
-            <button type="button" className="btn btn--primary" onClick={handleSavePants}>
+            <button type="submit" className="btn btn--primary">
               Add to Order
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {step === 'review' && (
         <div>
-          <ReviewSummary player={player} jerseys={jerseys} hat={hat} pants={pants} />
+          <ReviewSummary player={player} jerseys={jerseys} hats={hats} pants={pants} />
           {submitError && (
             <p className="form-error" role="alert">
               {submitError}
@@ -660,37 +784,6 @@ export default function OrderFormModal({ mode, initialForm, orderId, onClose, on
         </div>
       )}
     </Modal>
-  )
-}
-
-function CartItemRow({ label, required, summary, onAdd, onEdit, onRemove }) {
-  return (
-    <div className="cart-item">
-      <div className="cart-item__info">
-        <p className="cart-item__label">
-          {label} {required && <span className="muted">(required)</span>}
-        </p>
-        <p className={summary ? 'cart-item__summary' : 'muted'}>{summary ?? 'Not added yet'}</p>
-      </div>
-      <div className="cart-item__actions">
-        {summary ? (
-          <>
-            <button type="button" className="btn btn--outline btn--sm" onClick={onEdit}>
-              Edit
-            </button>
-            {onRemove && (
-              <button type="button" className="btn btn--danger btn--sm" onClick={onRemove}>
-                Remove
-              </button>
-            )}
-          </>
-        ) : (
-          <button type="button" className="btn btn--primary btn--sm" onClick={onAdd}>
-            + Add {label}
-          </button>
-        )}
-      </div>
-    </div>
   )
 }
 
@@ -742,7 +835,7 @@ function SizeSelect({ label, id, value, onChange, compact }) {
   )
 }
 
-function ReviewSummary({ player, jerseys, hat, pants }) {
+function ReviewSummary({ player, jerseys, hats, pants }) {
   return (
     <div className="review-summary">
       <dl>
@@ -769,15 +862,23 @@ function ReviewSummary({ player, jerseys, hat, pants }) {
           </dd>
         </div>
         <div className="review-row">
-          <dt>Hat</dt>
+          <dt>Hats ({hats.length})</dt>
           <dd>
-            {hat ? `Yes · ${hat.hatColor} · Size ${hat.hatSize} · Qty ${hat.quantity}` : 'No'}
+            {hats.length === 0 ? (
+              'None'
+            ) : (
+              hats.map((item, idx) => <div key={idx}>{summarizeHatItem(item)}</div>)
+            )}
           </dd>
         </div>
         <div className="review-row">
-          <dt>Pants</dt>
+          <dt>Pants ({pants.length})</dt>
           <dd>
-            {pants ? `Yes · ${pants.pantsColor} · Size ${pants.pantsSize} · Qty ${pants.quantity}` : 'No'}
+            {pants.length === 0 ? (
+              'None'
+            ) : (
+              pants.map((item, idx) => <div key={idx}>{summarizePantsItem(item)}</div>)
+            )}
           </dd>
         </div>
       </dl>

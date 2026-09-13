@@ -100,14 +100,18 @@ function AdminPanel() {
 
   const summary = useMemo(() => {
     const totalRevenue = orders.reduce((sum, o) => sum + (o.totalCost || 0), 0)
-    const hats = orders.reduce(
-      (sum, o) => sum + (o.needHat ? Math.max(1, Number(o.hatQuantity) || 1) : 0),
-      0,
-    )
-    const pants = orders.reduce(
-      (sum, o) => sum + (o.needPants ? Math.max(1, Number(o.pantsQuantity) || 1) : 0),
-      0,
-    )
+    const hats = orders.reduce((sum, o) => {
+      if (Array.isArray(o.hats) && o.hats.length > 0) {
+        return sum + o.hats.reduce((s, h) => s + (Number(h.quantity) || 1), 0)
+      }
+      return sum + (o.needHat ? Math.max(1, Number(o.hatQuantity) || 1) : 0)
+    }, 0)
+    const pants = orders.reduce((sum, o) => {
+      if (Array.isArray(o.pants) && o.pants.length > 0) {
+        return sum + o.pants.reduce((s, p) => s + (Number(p.quantity) || 1), 0)
+      }
+      return sum + (o.needPants ? Math.max(1, Number(o.pantsQuantity) || 1) : 0)
+    }, 0)
     const totalJerseys = orders.reduce((sum, o) => sum + (Number(o.quantity) || 1), 0)
     const redCount = orders.filter((o) => o.jerseyColor === 'Red').length
     const blueCount = orders.filter((o) => o.jerseyColor === 'Blue').length
@@ -319,14 +323,26 @@ function AdminPanel() {
                       </td>
                       <td data-label="Total Qty">{totalQty}</td>
                       <td data-label="Hat">
-                        {order.needHat
-                          ? `${order.hatColor || 'Red'} / ${order.hatSize} (Qty: ${order.hatQuantity || 1})`
-                          : '—'}
+                        {Array.isArray(order.hats) && order.hats.length > 0
+                          ? order.hats.map((h, i) => (
+                              <div key={i}>
+                                {h.hatColor || 'Red'} / {h.hatSize} (Qty: {h.quantity})
+                              </div>
+                            ))
+                          : order.needHat
+                            ? `${order.hatColor || 'Red'} / ${order.hatSize} (Qty: ${order.hatQuantity || 1})`
+                            : '—'}
                       </td>
                       <td data-label="Pants">
-                        {order.needPants
-                          ? `${order.pantsColor || 'Black'} / ${order.pantsSize} (Qty: ${order.pantsQuantity || 1})`
-                          : '—'}
+                        {Array.isArray(order.pants) && order.pants.length > 0
+                          ? order.pants.map((p, i) => (
+                              <div key={i}>
+                                {p.pantsColor || 'Red'} / {p.pantsSize} (Qty: {p.quantity})
+                              </div>
+                            ))
+                          : order.needPants
+                            ? `${order.pantsColor || 'Red'} / ${order.pantsSize} (Qty: ${order.pantsQuantity || 1})`
+                            : '—'}
                       </td>
                       <td data-label="Cost">${order.totalCost?.toFixed(2)}</td>
                       <td data-label="Status">

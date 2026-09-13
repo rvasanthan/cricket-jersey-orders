@@ -33,13 +33,19 @@ export function ordersToCsv(orders) {
       })
       .join('; ')
 
-    const hatDetails = order.needHat
-      ? `${order.hatColor || 'Red'} ${order.hatSize} x${order.hatQuantity || 1}`
-      : ''
+    const hatDetails =
+      Array.isArray(order.hats) && order.hats.length > 0
+        ? order.hats.map((h) => `${h.hatColor || 'Red'} ${h.hatSize} x${h.quantity}`).join('; ')
+        : order.needHat
+          ? `${order.hatColor || 'Red'} ${order.hatSize} x${order.hatQuantity || 1}`
+          : ''
 
-    const pantsDetails = order.needPants
-      ? `${order.pantsColor || 'Black'} ${order.pantsSize} x${order.pantsQuantity || 1}`
-      : ''
+    const pantsDetails =
+      Array.isArray(order.pants) && order.pants.length > 0
+        ? order.pants.map((p) => `${p.pantsColor || 'Red'} ${p.pantsSize} x${p.quantity}`).join('; ')
+        : order.needPants
+          ? `${order.pantsColor || 'Red'} ${order.pantsSize} x${order.pantsQuantity || 1}`
+          : ''
 
     return [
       order.orderNumber,

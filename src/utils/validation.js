@@ -1,8 +1,8 @@
 export const SIZES = ['S', 'M', 'L', 'XL', 'XXL']
 
 export const JERSEY_COLORS = ['Red', 'Blue']
-export const HAT_COLORS = ['Red', 'Blue', 'Black', 'White']
-export const PANTS_COLORS = ['Black', 'Navy', 'Red', 'Blue', 'White']
+export const HAT_COLORS = ['Red', 'Blue']
+export const PANTS_COLORS = ['Red', 'Blue']
 
 export const SLEEVE_TYPES = ['Half Sleeve', 'Full Sleeve']
 
@@ -54,6 +54,22 @@ export function validateJerseyItem(jersey) {
   const errors = {}
   if (!jersey.quantity || Number(jersey.quantity) < 1 || !Number.isInteger(Number(jersey.quantity))) {
     errors.quantity = 'Enter how many jerseys you need (1 or more).'
+  }
+  return errors
+}
+
+export function validateHatItem(hat) {
+  const errors = {}
+  if (!hat.quantity || Number(hat.quantity) < 1 || !Number.isInteger(Number(hat.quantity))) {
+    errors.quantity = 'Enter how many hats you need (1 or more).'
+  }
+  return errors
+}
+
+export function validatePantsItem(pants) {
+  const errors = {}
+  if (!pants.quantity || Number(pants.quantity) < 1 || !Number.isInteger(Number(pants.quantity))) {
+    errors.quantity = 'Enter how many pants you need (1 or more).'
   }
   return errors
 }
