@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // NOTE: This app has no authentication layer (by requirement), so these
+    // rules can only validate document *shape*, not *who* is writing. The
+    // admin screen is protected only by a client-side passcode, which is a
+    // UX gate, not a security boundary. Anyone with the app URL and API key
+    // can read/write orders directly against these rules.
+
+    function isValidOrder(order) {
+      return order.keys().hasAll([
+          'orderNumber', 'firstName', 'lastName', 'shortName', 'shortNameLower',
+          'jerseyNumber', 'jerseySize', 'needHat', 'needPants', 'status'
+        ])
+        && order.firstName is string && order.firstName.size() > 0
+        && order.lastName is string && order.lastName.size() > 0
+        && order.shortName is string && order.shortName.size() > 0
+        && order.jerseyNumber is string
+        && order.needHat is bool
+        && order.needPants is bool
+        && order.status in ['pending', 'fulfilled', 'paid'];
+    }
+
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if isValidOrder(request.resource.data);
+      allow update: if isValidOrder(request.resource.data);
+      allow delete: if true;
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
